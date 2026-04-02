@@ -1,0 +1,130 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');
+
+:root {
+  --vak-red: #ea1d2c;
+  --vak-dark: #1f1f1f;
+  --vak-bg: #e8e3d9;
+  --vak-border: #da291c;
+  --vak-light-border: #c4aca3;
+  --vak-white: #ffffff;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: var(--vak-bg);
+  color: var(--vak-dark);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-family: inherit;
+}
+
+/* Utilities */
+.container {
+  max-width: 600px; /* Mobile first approach for menu */
+  margin: 0 auto;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background-color: var(--vak-bg);
+  box-shadow: 0 0 20px rgba(0,0,0,0.1);
+}
+
+.text-red {
+  color: var(--vak-red);
+}
+
+.font-bold {
+  font-weight: 700;
+}
+
+.font-black {
+  font-weight: 900;
+}
+
+/* Animations */
+@keyframes slideIn {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slideIn 0.3s ease-out forwards;
+}
+
+/* Placeholder Styling */
+::placeholder {
+  font-weight: 300;
+  color: #c9c9c9;
+  opacity: 1;
+}
+
+::-ms-input-placeholder {
+  font-weight: 300;
+  color: #c9c9c9;
+}
+
+/* Esconder flechas de number inputs */
+input[type=number]::-webkit-inner-spin-button, 
+input[type=number]::-webkit-outer-spin-button { 
+  -webkit-appearance: none; 
+  margin: 0; 
+}
+input[type=number] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* Custom Burger Button Hover */
+.burger-size-btn {
+  transition: all 0.2s;
+}
+
+.price-btn-hover {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+}
+
+.price-text {
+  font-weight: 700;
+}
+
+.burger-size-btn:hover {
+  background-color: var(--vak-red) !important;
+  color: white !important;
+}
+
+/* Admin Icon Button Hover */
+.admin-icon-btn {
+  transition: all 0.2s;
+}
+.admin-icon-btn:hover {
+  background-color: #e0e0e0 !important;
+}
+.admin-icon-btn:hover svg {
+  stroke: #000000 !important;
+}
