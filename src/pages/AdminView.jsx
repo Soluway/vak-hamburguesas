@@ -1,17 +1,55 @@
 import React, { useState, useEffect } from 'react';
 import { getMenuData, saveMenuData } from '../data/menu';
-import { Trash, Pause, Play, Plus, Save, Upload, Download, Image as ImageIcon, Edit2, X, Check } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
+import { Trash, Pause, Play, Plus, Save, Upload, Download, Image as ImageIcon, Edit2, X, Check, LogOut, KeyRound } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 const AdminView = () => {
-  const [activeTab, setActiveTab] = useState('pedidos'); 
+  const { logout, changeCredentials } = useAuth();
+  const navigate = useNavigate();
+
+  const [activeTab, setActiveTab] = useState('pedidos');
   const [orders, setOrders] = useState([]);
   const [menuItems, setMenuItems] = useState([]);
   const [editingId, setEditingId] = useState(null);
-  
+
   const [newVarName, setNewVarName] = useState('');
   const [newVarPrice, setNewVarPrice] = useState('');
   const [isAddingVar, setIsAddingVar] = useState(false);
+
+  // Cambio de credenciales
+  const [credsForm, setCredsForm] = useState({ currentPassword: '', newUsername: '', newPassword: '', confirm: '' });
+  const [credsMsg, setCredsMsg] = useState(null);
+
+  const handleCredsChange = (e) => {
+    setCredsForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    setCredsMsg(null);
+  };
+
+  const handleSaveCreds = (e) => {
+    e.preventDefault();
+    if (credsForm.newPassword !== credsForm.confirm) {
+      setCredsMsg({ ok: false, text: 'Las contraseñas nuevas no coinciden.' });
+      return;
+    }
+    if (!credsForm.newUsername || !credsForm.newPassword) {
+      setCredsMsg({ ok: false, text: 'Completá todos los campos.' });
+      return;
+    }
+    const ok = changeCredentials(credsForm.currentPassword, credsForm.newUsername, credsForm.newPassword);
+    if (ok) {
+      setCredsMsg({ ok: true, text: '¡Credenciales actualizadas!' });
+      setCredsForm({ currentPassword: '', newUsername: '', newPassword: '', confirm: '' });
+    } else {
+      setCredsMsg({ ok: false, text: 'La contraseña actual es incorrecta.' });
+    }
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/admin/login');
+  };
 
   useEffect(() => {
     const loadOrders = () => {
@@ -201,20 +239,31 @@ const AdminView = () => {
 
   return (
     <div style={styles.adminPage}>
-      <h1 style={{color: 'var(--vak-red)', marginBottom: '1rem'}}>Panel de Autogestión</h1>
-      
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+        <h1 style={{ color: 'var(--vak-red)' }}>Panel de Autogestión</h1>
+        <button style={styles.btnLogout} onClick={handleLogout} title="Cerrar sesión">
+          <LogOut size={16} /> Salir
+        </button>
+      </div>
+
       <div style={styles.tabs}>
-        <button 
-          style={activeTab === 'pedidos' ? styles.activeTab : styles.tab} 
+        <button
+          style={activeTab === 'pedidos' ? styles.activeTab : styles.tab}
           onClick={() => setActiveTab('pedidos')}
         >
           Pedidos ({orders.filter(o => o.status === 'PENDIENTE').length})
         </button>
-        <button 
-          style={activeTab === 'menu' ? styles.activeTab : styles.tab} 
+        <button
+          style={activeTab === 'menu' ? styles.activeTab : styles.tab}
           onClick={() => setActiveTab('menu')}
         >
           Editor de Menú
+        </button>
+        <button
+          style={activeTab === 'config' ? styles.activeTab : styles.tab}
+          onClick={() => setActiveTab('config')}
+        >
+          <KeyRound size={14} style={{ marginRight: '4px' }} /> Acceso
         </button>
       </div>
 
@@ -246,6 +295,40 @@ const AdminView = () => {
               </div>
             ))
           )}
+        </div>
+      )}
+
+      {activeTab === 'config' && (
+        <div style={styles.contentArea}>
+          <div style={{ backgroundColor: '#fff', borderRadius: '12px', padding: '1.5rem', boxShadow: '0 4px 10px rgba(0,0,0,0.08)' }}>
+            <h3 style={{ marginBottom: '1.2rem', color: 'var(--vak-dark)' }}>Cambiar credenciales de acceso</h3>
+            <form onSubmit={handleSaveCreds} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxWidth: '320px' }}>
+              <div style={styles.credField}>
+                <label style={styles.credLabel}>Contraseña actual</label>
+                <input type="password" name="currentPassword" value={credsForm.currentPassword} onChange={handleCredsChange} style={styles.credInput} placeholder="••••••••" autoComplete="current-password" />
+              </div>
+              <div style={styles.credField}>
+                <label style={styles.credLabel}>Nuevo usuario</label>
+                <input type="text" name="newUsername" value={credsForm.newUsername} onChange={handleCredsChange} style={styles.credInput} placeholder="admin" autoComplete="username" />
+              </div>
+              <div style={styles.credField}>
+                <label style={styles.credLabel}>Nueva contraseña</label>
+                <input type="password" name="newPassword" value={credsForm.newPassword} onChange={handleCredsChange} style={styles.credInput} placeholder="••••••••" autoComplete="new-password" />
+              </div>
+              <div style={styles.credField}>
+                <label style={styles.credLabel}>Confirmar nueva contraseña</label>
+                <input type="password" name="confirm" value={credsForm.confirm} onChange={handleCredsChange} style={styles.credInput} placeholder="••••••••" autoComplete="new-password" />
+              </div>
+              {credsMsg && (
+                <p style={{ fontSize: '0.85rem', fontWeight: 600, color: credsMsg.ok ? 'green' : 'var(--vak-red)' }}>
+                  {credsMsg.text}
+                </p>
+              )}
+              <button type="submit" style={styles.btnPrimary}>
+                <Save size={16} /> Guardar credenciales
+              </button>
+            </form>
+          </div>
         </div>
       )}
 
@@ -547,7 +630,20 @@ const styles = {
   },
   addVarBtn: {
     backgroundColor: '#ffffff', color: '#333', border: 'none', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 5px rgba(0,0,0,0.15)', boxSizing: 'border-box'
-  }
+  },
+  btnLogout: {
+    display: 'flex', alignItems: 'center', gap: '6px',
+    backgroundColor: '#f0f0f0', color: '#555', padding: '0.5rem 0.9rem', borderRadius: '10px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem'
+  },
+  credField: {
+    display: 'flex', flexDirection: 'column', gap: '5px',
+  },
+  credLabel: {
+    fontSize: '0.8rem', fontWeight: 700, color: 'var(--vak-red)', paddingLeft: '4px',
+  },
+  credInput: {
+    padding: '0.65rem 1rem', borderRadius: '10px', border: '1px solid #e0e0e0', fontSize: '0.95rem', fontFamily: 'inherit', color: 'var(--vak-dark)', outline: 'none',
+  },
 };
 
 export default AdminView;
