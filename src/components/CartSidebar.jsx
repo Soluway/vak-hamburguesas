@@ -6,9 +6,8 @@ import Swal from 'sweetalert2';
 
 const WA_NUMBER = '5491135889974';
 
-// Centro de Bernal, Quilmes, Buenos Aires
-const BERNAL_CENTER = { lat: -34.7167, lng: -58.2833 };
-const MAX_RADIUS_KM = 4;
+const DEFAULT_COORDS = { lat: -34.7167, lng: -58.2833 };
+const DEFAULT_RADIUS_KM = 4;
 
 const haversineKm = (lat1, lng1, lat2, lng2) => {
   const R = 6371;
@@ -39,7 +38,11 @@ const CartSidebar = () => {
   const [addressValidated, setAddressValidated] = useState(false);
   const [checkingAddress, setCheckingAddress] = useState(false);
 
-  const { deliveryPrice = 0 } = getSettings();
+  const {
+    deliveryPrice = 0,
+    storeCoords = DEFAULT_COORDS,
+    deliveryRadiusKm = DEFAULT_RADIUS_KM,
+  } = getSettings();
   const deliveryCost = delivery === 'envio' ? deliveryPrice : 0;
   const grandTotal = cartTotal + deliveryCost;
 
@@ -74,8 +77,8 @@ const CartSidebar = () => {
         });
         return;
       }
-      const distKm = haversineKm(BERNAL_CENTER.lat, BERNAL_CENTER.lng, result.lat, result.lng);
-      if (distKm > MAX_RADIUS_KM) {
+      const distKm = haversineKm(storeCoords.lat, storeCoords.lng, result.lat, result.lng);
+      if (distKm > deliveryRadiusKm) {
         Swal.fire({
           icon: 'warning',
           title: 'Zona fuera de cobertura',

@@ -32,9 +32,10 @@ const AdminView = () => {
   const [credsForm, setCredsForm] = useState({ currentPassword: '', newUsername: '', newPassword: '', confirm: '' });
   const [credsMsg, setCredsMsg] = useState(null);
 
-  // Configuración (precio de envío)
+  // Configuración
   const [settings, setSettings] = useState(getSettings);
   const [settingsMsg, setSettingsMsg] = useState(null);
+  const [geocodingStore, setGeocodingStore] = useState(false);
 
   // Auto-save menú
   const [saveStatus, setSaveStatus] = useState(''); // '' | 'guardando' | 'guardado'
@@ -231,6 +232,33 @@ const AdminView = () => {
   const handleLogout = () => { logout(); navigate('/admin/login'); };
 
   // ── Configuración ─────────────────────────────────────────
+  const geocodeStoreAddress = async () => {
+    if (!settings.storeAddress?.trim()) return;
+    setGeocodingStore(true);
+    try {
+      const query = encodeURIComponent(settings.storeAddress);
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`,
+        { headers: { 'Accept-Language': 'es' } }
+      );
+      const data = await res.json();
+      if (!data.length) {
+        vak.fire({ icon: 'error', title: 'Dirección no encontrada', text: 'Intentá ser más específico.', confirmButtonText: 'OK' });
+        return;
+      }
+      const coords = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+      const updated = { ...settings, storeCoords: coords };
+      setSettings(updated);
+      saveSettings(updated);
+      setSettingsMsg('¡Dirección del local verificada y guardada!');
+      setTimeout(() => setSettingsMsg(null), 3000);
+    } catch {
+      vak.fire({ icon: 'error', title: 'Error de conexión', text: 'No se pudo verificar la dirección.', confirmButtonText: 'OK' });
+    } finally {
+      setGeocodingStore(false);
+    }
+  };
+
   const handleSaveSettings = (e) => {
     e.preventDefault();
     saveSettings(settings);
@@ -492,27 +520,72 @@ const AdminView = () => {
       {activeTab === 'config' && (
         <div style={styles.contentArea}>
 
-          {/* Precio de envío */}
+          {/* Zona de envío */}
           <div style={styles.configCard}>
-            <h3 style={{ marginBottom: '1rem', color: 'var(--vak-dark)' }}>🛵 Precio de envío</h3>
-            <form onSubmit={handleSaveSettings} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxWidth: '320px' }}>
+            <h3 style={{ marginBottom: '0.25rem', color: 'var(--vak-dark)' }}>📍 Zona de envío</h3>
+            <p style={{ fontSize: '0.8rem', color: 'gray', marginBottom: '1rem' }}>
+              Definí la dirección del local y el radio de cobertura. Los clientes fuera de esa zona no podrán pedir envío.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxWidth: '360px' }}>
               <div style={styles.credField}>
-                <label style={styles.credLabel}>Costo de envío a domicilio ($)</label>
+                <label style={styles.credLabel}>Dirección del local</label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="text"
+                    value={settings.storeAddress || ''}
+                    onChange={(e) => setSettings(prev => ({ ...prev, storeAddress: e.target.value }))}
+                    style={{ ...styles.credInput, flex: 1 }}
+                    placeholder="Ej: Av. Calchaquí 1000, Bernal"
+                    onKeyDown={(e) => e.key === 'Enter' && geocodeStoreAddress()}
+                  />
+                  <button
+                    type="button"
+                    onClick={geocodeStoreAddress}
+                    disabled={geocodingStore || !settings.storeAddress?.trim()}
+                    style={{ ...styles.btnUniform, flexShrink: 0, opacity: geocodingStore ? 0.6 : 1 }}
+                  >
+                    {geocodingStore ? '...' : 'Verificar'}
+                  </button>
+                </div>
+                {settings.storeCoords && settings.storeAddress && (
+                  <span style={{ fontSize: '0.75rem', color: '#2e7d32', fontWeight: 600 }}>
+                    ✓ Coordenadas: {settings.storeCoords.lat.toFixed(4)}, {settings.storeCoords.lng.toFixed(4)}
+                  </span>
+                )}
+              </div>
+
+              <div style={styles.credField}>
+                <label style={styles.credLabel}>Radio de cobertura (km)</label>
                 <input
                   type="number"
-                  value={settings.deliveryPrice}
+                  value={settings.deliveryRadiusKm ?? 4}
+                  onChange={(e) => setSettings(prev => ({ ...prev, deliveryRadiusKm: Number(e.target.value) }))}
+                  style={styles.credInput}
+                  placeholder="Ej: 4"
+                  min="1"
+                  max="30"
+                />
+                <span style={{ fontSize: '0.75rem', color: 'gray' }}>Radio en kilómetros desde el local.</span>
+              </div>
+
+              <div style={styles.credField}>
+                <label style={styles.credLabel}>Costo de envío ($)</label>
+                <input
+                  type="number"
+                  value={settings.deliveryPrice ?? 0}
                   onChange={(e) => setSettings(prev => ({ ...prev, deliveryPrice: Number(e.target.value) }))}
                   style={styles.credInput}
                   placeholder="Ej: 2000"
                   min="0"
                 />
-                <span style={{ fontSize: '0.75rem', color: 'gray' }}>Ponelo en 0 si el envío es gratis o variable.</span>
+                <span style={{ fontSize: '0.75rem', color: 'gray' }}>Ponelo en 0 si el envío es gratis.</span>
               </div>
-              {settingsMsg && <p style={{ fontSize: '0.85rem', fontWeight: 600, color: 'green' }}>{settingsMsg}</p>}
-              <button type="submit" style={styles.btnPrimary}>
+
+              {settingsMsg && <p style={{ fontSize: '0.85rem', fontWeight: 600, color: '#2e7d32' }}>{settingsMsg}</p>}
+              <button type="button" onClick={handleSaveSettings} style={styles.btnPrimary}>
                 <Save size={16} /> Guardar configuración
               </button>
-            </form>
+            </div>
           </div>
 
           {/* Credenciales */}
