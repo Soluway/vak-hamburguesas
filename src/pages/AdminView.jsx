@@ -386,14 +386,25 @@ const AdminView = () => {
                 )}
 
                 {/* Imagen */}
-                {isEditing && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
+                {isEditing ? (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem', alignItems: 'center' }}>
                     <label className="admin-icon-btn" style={styles.fileUploadContainer}>
                       <ImageIcon size={18} color="#555" /> Subir Foto
                       <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => handleImageUpload(item.id, e)} />
                     </label>
-                    {item.image && <span style={{ color: 'var(--vak-red)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', fontWeight: 'bold' }}>✓ Imagen cargada</span>}
+                    {item.image && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <img src={item.image} alt="preview" style={{ width: '40px', height: '40px', borderRadius: '8px', objectFit: 'cover' }} />
+                        <span style={{ color: 'green', fontSize: '0.8rem', fontWeight: 'bold' }}>✓ Imagen cargada</span>
+                      </div>
+                    )}
                   </div>
+                ) : (
+                  item.image && (
+                    <div style={{ marginBottom: '1rem' }}>
+                      <img src={item.image} alt="burger" style={{ width: '100px', height: '70px', borderRadius: '8px', objectFit: 'cover', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }} />
+                    </div>
+                  )
                 )}
 
                 {/* Precios */}

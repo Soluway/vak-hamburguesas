@@ -40,25 +40,35 @@ const BurgerCard = ({ product }) => {
 
   return (
     <div style={styles.card}>
-      <div style={styles.headerRow}>
-        <h2 style={styles.title}>
-          <span style={styles.titleBold}>{firstLetter}</span>
-          <span style={styles.titleLight}>{restName}</span>
-        </h2>
-        {activeTags.includes('VEGGIE') && (
-          <div style={styles.veggieBadge}>VEGGIE</div>
+      <div style={styles.topSection}>
+        <div style={styles.textColumn}>
+          <div style={styles.headerRow}>
+            <h2 style={styles.title}>
+              <span style={styles.titleBold}>{firstLetter}</span>
+              <span style={styles.titleLight}>{restName}</span>
+            </h2>
+            {activeTags.includes('VEGGIE') && (
+              <div style={styles.veggieBadge}>VEGGIE</div>
+            )}
+          </div>
+
+          <p style={styles.description}>{desc}</p>
+
+          {activeTags.filter(t => t !== 'VEGGIE').length > 0 && (
+            <div style={styles.tagsRow}>
+              {activeTags.filter(t => t !== 'VEGGIE').map(tag => (
+                <span key={tag} style={tagStyle(tag)}>{tag}</span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {product.image && (
+          <div style={styles.imageColumn}>
+            <img src={product.image} alt={name} style={styles.burgerImage} />
+          </div>
         )}
       </div>
-
-      <p style={styles.description}>{desc}</p>
-
-      {activeTags.filter(t => t !== 'VEGGIE').length > 0 && (
-        <div style={styles.tagsRow}>
-          {activeTags.filter(t => t !== 'VEGGIE').map(tag => (
-            <span key={tag} style={tagStyle(tag)}>{tag}</span>
-          ))}
-        </div>
-      )}
 
       <div style={styles.sizesContainer}>
         {sizes.map((size) => (
@@ -86,6 +96,29 @@ const styles = {
     padding: '1.5rem',
     borderBottom: '1px solid var(--vak-red)',
     backgroundColor: 'var(--vak-bg)',
+  },
+  topSection: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: '1rem',
+  },
+  textColumn: {
+    flex: 1,
+    minWidth: 0,
+  },
+  imageColumn: {
+    width: '140px',
+    height: '100px',
+    flexShrink: 0,
+    borderRadius: '10px',
+    overflow: 'hidden',
+    boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
+  },
+  burgerImage: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
   },
   headerRow: {
     display: 'flex',
@@ -122,7 +155,6 @@ const styles = {
     marginTop: '1rem',
     marginBottom: '0.75rem',
     lineHeight: '1.4',
-    maxWidth: '90%',
   },
   tagsRow: {
     display: 'flex',

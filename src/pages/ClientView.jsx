@@ -39,9 +39,7 @@ const ClientView = () => {
             </div>
           </div>
           <div style={styles.bannerImageContainer}>
-            {menu.length > 0 && menu[0].image && (
-              <img src={menu[0].image} alt="Promo" style={styles.bannerImage} />
-            )}
+            {/* Banner image removed to avoid overriding the "Menú" banner with burger photos */}
           </div>
         </div>
       </div>
