@@ -105,7 +105,8 @@ const styles = {
     right: 0,
     top: 0,
     bottom: 0,
-    width: '240px', /* más anchura para la izquierda */
+    width: '45%', /* Menos del 50% para que el texto nunca la pise en celulares chicos */
+    maxWidth: '280px', /* Tope máximo para PC */
     zIndex: 1,
     clipPath: 'polygon(15% 0, 100% 0, 100% 100%, 0% 100%)',
   },
@@ -130,7 +131,7 @@ const styles = {
   textColumn: {
     flex: 1,
     minWidth: 0,
-    maxWidth: '55%', /* asegurar que el texto llegue solo a la mitad para no superponerse con la hamburguesa */
+    maxWidth: '52%', /* asegurar que el texto llegue solo un poco más allá del centro */
   },
   headerRow: {
     display: 'flex',
