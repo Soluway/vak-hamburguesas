@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useCart } from '../context/CartContext';
+import { getSettings } from '../data/menu';
 import { X, Plus, Minus, MessageCircle, ChevronLeft } from 'lucide-react';
 
 const WA_NUMBER = '5491135889974';
@@ -9,6 +10,10 @@ const CartSidebar = () => {
   const [step, setStep] = useState('cart'); // 'cart' | 'checkout'
   const [delivery, setDelivery] = useState(''); // 'envio' | 'retiro'
   const [payment, setPayment] = useState(''); // 'transferencia' | 'efectivo'
+
+  const { deliveryPrice = 0 } = getSettings();
+  const deliveryCost = delivery === 'envio' ? deliveryPrice : 0;
+  const grandTotal = cartTotal + deliveryCost;
 
   const formatPrice = (price) => `$${price.toLocaleString('es-AR')}`;
 
@@ -26,18 +31,19 @@ const CartSidebar = () => {
     const deliveryLabel = delivery === 'envio' ? '🛵 Envío a domicilio' : '🏠 Retiro en local';
     const paymentLabel = payment === 'transferencia' ? '💳 Transferencia' : '💵 Efectivo';
 
-    const msg = [
+    const msgLines = [
       '🍔 *Pedido VAK Hamburguesas*',
       '',
       ...lines,
-      '',
-      `*Total: ${formatPrice(cartTotal)}*`,
-      '',
-      `📦 *Entrega:* ${deliveryLabel}`,
-      `💰 *Pago:* ${paymentLabel}`,
-    ].join('\n');
+    ];
 
-    return encodeURIComponent(msg);
+    if (delivery === 'envio' && deliveryPrice > 0) {
+      msgLines.push(`• Envío — ${formatPrice(deliveryPrice)}`);
+    }
+
+    msgLines.push('', `*Total: ${formatPrice(grandTotal)}*`, '', `📦 *Entrega:* ${deliveryLabel}`, `💰 *Pago:* ${paymentLabel}`);
+
+    return encodeURIComponent(msgLines.join('\n'));
   };
 
   const sendToWhatsApp = () => {
@@ -125,9 +131,15 @@ const CartSidebar = () => {
                     <span style={{ color: 'var(--vak-red)', fontWeight: 700 }}>{formatPrice(item.price * item.quantity)}</span>
                   </div>
                 ))}
+                {delivery === 'envio' && deliveryPrice > 0 && (
+                  <div style={styles.summaryRow}>
+                    <span>🛵 Envío</span>
+                    <span style={{ color: 'var(--vak-red)', fontWeight: 700 }}>{formatPrice(deliveryPrice)}</span>
+                  </div>
+                )}
                 <div style={{ ...styles.summaryRow, borderTop: '1px solid #eee', paddingTop: '10px', marginTop: '4px', fontWeight: 900 }}>
                   <span>TOTAL</span>
-                  <span style={{ color: 'var(--vak-red)' }}>{formatPrice(cartTotal)}</span>
+                  <span style={{ color: 'var(--vak-red)' }}>{formatPrice(grandTotal)}</span>
                 </div>
               </div>
 

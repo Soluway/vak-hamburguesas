@@ -1,26 +1,42 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useCart } from '../context/CartContext';
-import { Plus } from 'lucide-react';
+
+const TAG_COLORS = {
+  VEGGIE:   { bg: '#2e7d32', color: '#fff' },
+  BACON:    { bg: '#6d1a1a', color: '#fff' },
+  PICANTE:  { bg: '#e65100', color: '#fff' },
+  ESPECIAL: { bg: '#1565c0', color: '#fff' },
+  NUEVO:    { bg: '#6a1b9a', color: '#fff' },
+  DEFAULT:  { bg: 'var(--vak-dark)', color: '#fff' },
+};
+
+const tagStyle = (tag) => {
+  const c = TAG_COLORS[tag] || TAG_COLORS.DEFAULT;
+  return {
+    backgroundColor: c.bg,
+    color: c.color,
+    padding: '3px 10px',
+    borderRadius: '20px',
+    fontSize: '0.7rem',
+    fontWeight: 800,
+    letterSpacing: '0.5px',
+    display: 'inline-block',
+  };
+};
 
 const BurgerCard = ({ product }) => {
-  const { id, name, desc, prices, tags } = product;
+  const { name, desc, prices, tags } = product;
   const { addToCart } = useCart();
-  
-  // Parse name to format specifically like the PDF (e.g. KLASI — K)
-  const [firstPart, ...restParts] = name.split('-');
+
   const firstLetter = name.charAt(0);
   const restName = name.substring(1);
 
-  // We dynamically generate available sizes/variations from the prices object
   const sizes = Object.entries(prices || {})
-    .filter(([key, value]) => value !== null && value !== undefined && value !== '')
-    .map(([key, value]) => ({
-      label: key.toUpperCase(),
-      key: key,
-      price: value
-    }));
+    .filter(([, value]) => value !== null && value !== undefined && value !== '')
+    .map(([key, value]) => ({ label: key.toUpperCase(), key, price: value }));
 
   const formatPrice = (price) => `$${price.toLocaleString('es-AR')}`;
+  const activeTags = (tags || []).filter(Boolean);
 
   return (
     <div style={styles.card}>
@@ -29,19 +45,26 @@ const BurgerCard = ({ product }) => {
           <span style={styles.titleBold}>{firstLetter}</span>
           <span style={styles.titleLight}>{restName}</span>
         </h2>
-        
-        {tags && tags.includes('VEGGIE') && (
-          <div style={styles.tagBadge}>VEGGIE</div>
+        {activeTags.includes('VEGGIE') && (
+          <div style={styles.veggieBadge}>VEGGIE</div>
         )}
       </div>
 
       <p style={styles.description}>{desc}</p>
 
+      {activeTags.filter(t => t !== 'VEGGIE').length > 0 && (
+        <div style={styles.tagsRow}>
+          {activeTags.filter(t => t !== 'VEGGIE').map(tag => (
+            <span key={tag} style={tagStyle(tag)}>{tag}</span>
+          ))}
+        </div>
+      )}
+
       <div style={styles.sizesContainer}>
         {sizes.map((size) => (
           <div key={size.key} style={styles.sizeColumn}>
             <span style={styles.sizeLabel}>{size.label}</span>
-            <button 
+            <button
               className="burger-size-btn"
               style={styles.priceButton}
               onClick={() => addToCart(product, size.label, size.price)}
@@ -74,17 +97,13 @@ const styles = {
     fontSize: '2.5rem',
     textTransform: 'uppercase',
     letterSpacing: '-1px',
-    margin: '0',
+    margin: 0,
   },
-  titleBold: {
-    fontWeight: 900,
-  },
-  titleLight: {
-    fontWeight: 400,
-  },
-  tagBadge: {
-    backgroundColor: 'var(--vak-red)',
-    color: 'white',
+  titleBold:  { fontWeight: 900 },
+  titleLight: { fontWeight: 400 },
+  veggieBadge: {
+    backgroundColor: TAG_COLORS.VEGGIE.bg,
+    color: TAG_COLORS.VEGGIE.color,
     padding: '0.5rem',
     borderRadius: '50%',
     width: '60px',
@@ -95,20 +114,28 @@ const styles = {
     fontSize: '0.7rem',
     fontWeight: 'bold',
     transform: 'rotate(-10deg)',
+    flexShrink: 0,
   },
   description: {
     fontSize: '0.9rem',
     fontWeight: 600,
     marginTop: '1rem',
-    marginBottom: '1.5rem',
+    marginBottom: '0.75rem',
     lineHeight: '1.4',
     maxWidth: '90%',
+  },
+  tagsRow: {
+    display: 'flex',
+    gap: '6px',
+    flexWrap: 'wrap',
+    marginBottom: '1rem',
   },
   sizesContainer: {
     display: 'flex',
     justifyContent: 'space-between',
     flexWrap: 'wrap',
     gap: '0.5rem',
+    marginTop: '0.5rem',
   },
   sizeColumn: {
     display: 'flex',
@@ -129,10 +156,10 @@ const styles = {
     padding: '0.5rem 1rem',
     backgroundColor: 'transparent',
     color: 'var(--vak-dark)',
-    fontWeight: '700',
+    fontWeight: 700,
     width: '100%',
     transition: 'all 0.2s',
-  }
+  },
 };
 
 export default BurgerCard;

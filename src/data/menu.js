@@ -75,3 +75,13 @@ export const getMenuData = () => {
 export const saveMenuData = (data) => {
   localStorage.setItem('vak_menu', JSON.stringify(data));
 };
+
+export const getSettings = () => {
+  const stored = localStorage.getItem('vak_settings');
+  if (stored) return JSON.parse(stored);
+  return { deliveryPrice: 0 };
+};
+
+export const saveSettings = (data) => {
+  localStorage.setItem('vak_settings', JSON.stringify(data));
+};

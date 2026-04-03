@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { getMenuData, saveMenuData } from '../data/menu';
+import { getMenuData, saveMenuData, getSettings, saveSettings } from '../data/menu';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Trash, Pause, Play, Plus, Save, Upload, Download, Image as ImageIcon, Edit2, X, Check, LogOut, KeyRound } from 'lucide-react';
 import * as XLSX from 'xlsx';
+
+const PRESET_TAGS = ['VEGGIE', 'BACON', 'PICANTE', 'ESPECIAL', 'NUEVO'];
 
 const AdminView = () => {
   const { logout, changeCredentials } = useAuth();
@@ -18,38 +20,13 @@ const AdminView = () => {
   const [newVarPrice, setNewVarPrice] = useState('');
   const [isAddingVar, setIsAddingVar] = useState(false);
 
-  // Cambio de credenciales
+  // Credenciales
   const [credsForm, setCredsForm] = useState({ currentPassword: '', newUsername: '', newPassword: '', confirm: '' });
   const [credsMsg, setCredsMsg] = useState(null);
 
-  const handleCredsChange = (e) => {
-    setCredsForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
-    setCredsMsg(null);
-  };
-
-  const handleSaveCreds = (e) => {
-    e.preventDefault();
-    if (credsForm.newPassword !== credsForm.confirm) {
-      setCredsMsg({ ok: false, text: 'Las contraseñas nuevas no coinciden.' });
-      return;
-    }
-    if (!credsForm.newUsername || !credsForm.newPassword) {
-      setCredsMsg({ ok: false, text: 'Completá todos los campos.' });
-      return;
-    }
-    const ok = changeCredentials(credsForm.currentPassword, credsForm.newUsername, credsForm.newPassword);
-    if (ok) {
-      setCredsMsg({ ok: true, text: '¡Credenciales actualizadas!' });
-      setCredsForm({ currentPassword: '', newUsername: '', newPassword: '', confirm: '' });
-    } else {
-      setCredsMsg({ ok: false, text: 'La contraseña actual es incorrecta.' });
-    }
-  };
-
-  const handleLogout = () => {
-    logout();
-    navigate('/admin/login');
-  };
+  // Configuración (precio de envío)
+  const [settings, setSettings] = useState(getSettings);
+  const [settingsMsg, setSettingsMsg] = useState(null);
 
   useEffect(() => {
     const loadOrders = () => {
@@ -62,59 +39,50 @@ const AdminView = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // ── Pedidos ────────────────────────────────────────────────
   const handleStatusChange = (orderId, newStatus) => {
-    const updated = orders.map(o => o.id === orderId ? {...o, status: newStatus} : o);
+    const updated = orders.map(o => o.id === orderId ? { ...o, status: newStatus } : o);
     setOrders(updated);
     localStorage.setItem('vak_orders', JSON.stringify(updated));
   };
-  
+
+  // ── Menú ──────────────────────────────────────────────────
   const handleItemChange = (id, field, value) => {
-    setMenuItems(prev => prev.map(item => {
-      if (item.id === id) {
-        return { ...item, [field]: value };
-      }
-      return item;
-    }));
+    setMenuItems(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
   };
 
   const handlePriceChange = (id, key, newPrice) => {
     setMenuItems(prev => prev.map(item => {
-      if(item.id === id) {
-        return {
-          ...item,
-          prices: { ...item.prices, [key]: newPrice === '' ? null : Number(newPrice) }
-        }
-      }
-      return item;
+      if (item.id !== id) return item;
+      return { ...item, prices: { ...item.prices, [key]: newPrice === '' ? null : Number(newPrice) } };
     }));
   };
 
   const addVariation = (id) => {
-    if(!newVarName || !newVarPrice) return;
+    if (!newVarName || !newVarPrice) return;
     const cleanKey = newVarName.trim().toLowerCase();
-    
     setMenuItems(prev => prev.map(item => {
-      if(item.id === id) {
-        return {
-          ...item,
-          prices: { ...item.prices, [cleanKey]: Number(newVarPrice) }
-        }
-      }
-      return item;
+      if (item.id !== id) return item;
+      return { ...item, prices: { ...item.prices, [cleanKey]: Number(newVarPrice) } };
     }));
-    setNewVarName('');
-    setNewVarPrice('');
-    setIsAddingVar(false);
+    setNewVarName(''); setNewVarPrice(''); setIsAddingVar(false);
   };
 
   const removeVariation = (id, keyToRemove) => {
     setMenuItems(prev => prev.map(item => {
-      if(item.id === id) {
-        const newPrices = { ...item.prices };
-        delete newPrices[keyToRemove];
-        return { ...item, prices: newPrices };
-      }
-      return item;
+      if (item.id !== id) return item;
+      const newPrices = { ...item.prices };
+      delete newPrices[keyToRemove];
+      return { ...item, prices: newPrices };
+    }));
+  };
+
+  const toggleTag = (id, tag) => {
+    setMenuItems(prev => prev.map(item => {
+      if (item.id !== id) return item;
+      const tags = item.tags || [];
+      const next = tags.includes(tag) ? tags.filter(t => t !== tag) : [...tags, tag];
+      return { ...item, tags: next };
     }));
   };
 
@@ -123,7 +91,7 @@ const AdminView = () => {
   };
 
   const deleteItem = (id) => {
-    if(window.confirm('¿Eliminar definitivamente esta hamburguesa?')) {
+    if (window.confirm('¿Eliminar definitivamente esta hamburguesa?')) {
       setMenuItems(prev => prev.filter(item => item.id !== id));
       if (editingId === id) setEditingId(null);
     }
@@ -137,158 +105,162 @@ const AdminView = () => {
       prices: { simple: 0 },
       image: '',
       tags: [],
-      paused: true
+      paused: true,
     };
-    setMenuItems([...menuItems, newItem]);
-    setEditingId(newItem.id); // Open in edit mode right away
+    setMenuItems(prev => [newItem, ...prev]);
+    setEditingId(newItem.id);
+    setActiveTab('menu');
   };
 
   const saveMenu = () => {
     saveMenuData(menuItems);
     setEditingId(null);
-    alert("¡Cambios guardados con éxito!");
+    alert('¡Cambios guardados con éxito!');
   };
 
-  // --- IMAGES ---
+  // ── Imágenes ──────────────────────────────────────────────
   const handleImageUpload = (id, e) => {
     const file = e.target.files[0];
-    if(!file) return;
+    if (!file) return;
     const reader = new FileReader();
     reader.onload = (evt) => {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 400; 
-        const scaleSize = MAX_WIDTH / img.width;
-        canvas.width = MAX_WIDTH;
-        if (scaleSize < 1) {
-          canvas.height = img.height * scaleSize;
-        } else {
-          canvas.width = img.width;
-          canvas.height = img.height;
-        }
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.6); 
-        handleItemChange(id, 'image', dataUrl);
+        const MAX_WIDTH = 400;
+        const scale = MAX_WIDTH / img.width;
+        canvas.width = scale < 1 ? MAX_WIDTH : img.width;
+        canvas.height = scale < 1 ? img.height * scale : img.height;
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        handleItemChange(id, 'image', canvas.toDataURL('image/jpeg', 0.6));
       };
       img.src = evt.target.result;
     };
     reader.readAsDataURL(file);
   };
 
-  // --- EXCEL ---
+  // ── Excel ─────────────────────────────────────────────────
   const exportToExcel = () => {
-    const ws = XLSX.utils.json_to_sheet(menuItems.map(item => {
-      // Serializar precios: "simple:9000;doble:11200"
-      const pricesStr = Object.entries(item.prices)
-        .filter(([k,v]) => v !== null)
-        .map(([k,v]) => `${k}:${v}`)
-        .join(';');
-        
-      return {
-        ID: item.id,
-        Nombre: item.name,
-        Descripción: item.desc,
-        Variaciones: pricesStr,
-        Imagen_Referencia: item.image ? 'Base64/URL adjunta' : '',
-        Pausada: item.paused ? 'Si' : 'No'
-      }
-    }));
+    const ws = XLSX.utils.json_to_sheet(menuItems.map(item => ({
+      ID: item.id,
+      Nombre: item.name,
+      Descripción: item.desc,
+      Variaciones: Object.entries(item.prices).filter(([, v]) => v !== null).map(([k, v]) => `${k}:${v}`).join(';'),
+      Etiquetas: (item.tags || []).join(','),
+      Imagen_Referencia: item.image ? 'Base64/URL adjunta' : '',
+      Pausada: item.paused ? 'Si' : 'No',
+    })));
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Menu_VAK");
-    XLSX.writeFile(wb, "Menu_Vak.xlsx");
+    XLSX.utils.book_append_sheet(wb, ws, 'Menu_VAK');
+    XLSX.writeFile(wb, 'Menu_Vak.xlsx');
   };
 
   const importFromExcel = (e) => {
     const file = e.target.files[0];
-    if(!file) return;
+    if (!file) return;
     const reader = new FileReader();
     reader.onload = (evt) => {
-      const bstr = evt.target.result;
-      const wb = XLSX.read(bstr, { type: 'binary' });
-      const wsname = wb.SheetNames[0];
-      const data = XLSX.utils.sheet_to_json(wb.Sheets[wsname]);
-      
-      const importedMenu = data.map(row => {
-        // Deserializar Variaciones
+      const wb = XLSX.read(evt.target.result, { type: 'binary' });
+      const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+      setMenuItems(data.map(row => {
         const parsedPrices = {};
         if (row.Variaciones) {
-          const varPieces = String(row.Variaciones).split(';');
-          varPieces.forEach(p => {
-             const [k, v] = p.split(':');
-             if(k && v) parsedPrices[k.trim().toLowerCase()] = Number(v);
+          String(row.Variaciones).split(';').forEach(p => {
+            const [k, v] = p.split(':');
+            if (k && v) parsedPrices[k.trim().toLowerCase()] = Number(v);
           });
         }
-
         return {
           id: row.ID || Date.now() + Math.random(),
           name: row.Nombre || 'Sin Nombre',
           desc: row.Descripción || '',
           prices: Object.keys(parsedPrices).length > 0 ? parsedPrices : { simple: 0 },
-          image: '', 
-          tags: [],
-          paused: String(row.Pausada).toLowerCase() === 'si'
-        }
-      });
-      setMenuItems(importedMenu);
+          tags: row.Etiquetas ? String(row.Etiquetas).split(',').map(t => t.trim()).filter(Boolean) : [],
+          image: '',
+          paused: String(row.Pausada).toLowerCase() === 'si',
+        };
+      }));
     };
     reader.readAsBinaryString(file);
-    e.target.value = null; 
+    e.target.value = null;
   };
 
+  // ── Credenciales ──────────────────────────────────────────
+  const handleCredsChange = (e) => {
+    setCredsForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    setCredsMsg(null);
+  };
+
+  const handleSaveCreds = (e) => {
+    e.preventDefault();
+    if (credsForm.newPassword !== credsForm.confirm) { setCredsMsg({ ok: false, text: 'Las contraseñas nuevas no coinciden.' }); return; }
+    if (!credsForm.newUsername || !credsForm.newPassword) { setCredsMsg({ ok: false, text: 'Completá todos los campos.' }); return; }
+    const ok = changeCredentials(credsForm.currentPassword, credsForm.newUsername, credsForm.newPassword);
+    if (ok) { setCredsMsg({ ok: true, text: '¡Credenciales actualizadas!' }); setCredsForm({ currentPassword: '', newUsername: '', newPassword: '', confirm: '' }); }
+    else setCredsMsg({ ok: false, text: 'La contraseña actual es incorrecta.' });
+  };
+
+  const handleLogout = () => { logout(); navigate('/admin/login'); };
+
+  // ── Configuración ─────────────────────────────────────────
+  const handleSaveSettings = (e) => {
+    e.preventDefault();
+    saveSettings(settings);
+    setSettingsMsg('¡Configuración guardada!');
+    setTimeout(() => setSettingsMsg(null), 2500);
+  };
+
+  // ── Render ────────────────────────────────────────────────
   return (
     <div style={styles.adminPage}>
+
+      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-        <h1 style={{ color: 'var(--vak-red)' }}>Panel de Autogestión</h1>
-        <button style={styles.btnLogout} onClick={handleLogout} title="Cerrar sesión">
+        <h1 style={{ color: 'var(--vak-red)' }}>Panel VAK</h1>
+        <button style={styles.btnLogout} onClick={handleLogout}>
           <LogOut size={16} /> Salir
         </button>
       </div>
 
+      {/* Tabs */}
       <div style={styles.tabs}>
-        <button
-          style={activeTab === 'pedidos' ? styles.activeTab : styles.tab}
-          onClick={() => setActiveTab('pedidos')}
-        >
-          Pedidos ({orders.filter(o => o.status === 'PENDIENTE').length})
-        </button>
-        <button
-          style={activeTab === 'menu' ? styles.activeTab : styles.tab}
-          onClick={() => setActiveTab('menu')}
-        >
-          Editor de Menú
-        </button>
-        <button
-          style={activeTab === 'config' ? styles.activeTab : styles.tab}
-          onClick={() => setActiveTab('config')}
-        >
-          <KeyRound size={14} style={{ marginRight: '4px' }} /> Acceso
-        </button>
+        {[
+          { id: 'pedidos', label: `Pedidos (${orders.filter(o => o.status === 'PENDIENTE').length})` },
+          { id: 'menu',    label: 'Editor de Menú' },
+          { id: 'config',  label: 'Configuración' },
+        ].map(tab => (
+          <button
+            key={tab.id}
+            style={activeTab === tab.id ? styles.activeTab : styles.tab}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
+      {/* ── PEDIDOS ── */}
       {activeTab === 'pedidos' && (
         <div style={styles.contentArea}>
-           {/* ... Lógica de Pedidos (Igual que antes) ... */}
-           {orders.length === 0 ? (
-            <p>No hay pedidos recientes.</p>
+          {orders.length === 0 ? (
+            <p style={{ color: 'gray', textAlign: 'center', marginTop: '2rem' }}>No hay pedidos recientes.</p>
           ) : (
             orders.map(order => (
               <div key={order.id} style={styles.orderCard}>
-                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <strong>Pedido #{order.id.toString().slice(-4)}</strong>
                   <span style={styles.statusBadge(order.status)}>{order.status}</span>
                 </div>
-                <div style={{margin: '10px 0', fontSize: '0.9rem'}}>
+                <div style={{ margin: '10px 0', fontSize: '0.9rem' }}>
                   {order.items.map(i => (
                     <div key={i.tempId}>🔹 {i.quantity}x {i.name} ({i.size})</div>
                   ))}
                 </div>
-                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-                  <strong style={{color: 'var(--vak-red)', fontSize: '1.2rem'}}>${order.total.toLocaleString('es-AR')}</strong>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <strong style={{ color: 'var(--vak-red)', fontSize: '1.2rem' }}>${order.total.toLocaleString('es-AR')}</strong>
                   {order.status === 'PENDIENTE' && (
                     <button style={styles.btnUniform} onClick={() => handleStatusChange(order.id, 'COMPLETADO')}>
-                      <Check size={16}/> Marcar Listo
+                      <Check size={16} /> Marcar Listo
                     </button>
                   )}
                 </div>
@@ -298,10 +270,225 @@ const AdminView = () => {
         </div>
       )}
 
+      {/* ── MENU ── */}
+      {activeTab === 'menu' && (
+        <div style={styles.contentArea}>
+
+          {/* Botón agregar prominente */}
+          <button style={styles.btnAddBig} onClick={addNewItem}>
+            <Plus size={20} /> Agregar Nueva Hamburguesa
+          </button>
+
+          {/* Herramientas secundarias */}
+          <div style={styles.topTools}>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <button style={styles.btnUniform} onClick={exportToExcel}><Download size={16} /> Exportar Excel</button>
+              <label style={styles.btnUniformUpload}>
+                <Upload size={16} /> Importar Excel
+                <input type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={importFromExcel} />
+              </label>
+            </div>
+            <button style={styles.btnPrimary} onClick={saveMenu}>
+              <Save size={16} /> Guardar Menú
+            </button>
+          </div>
+
+          <div style={styles.infoBox}>Tocá el ícono ✏️ de cada tarjeta para editar. Guardá con el botón rojo al terminar.</div>
+
+          {/* Cards de hamburguesas */}
+          {menuItems.map(item => {
+            const isEditing = editingId === item.id;
+            return (
+              <div key={item.id} style={{ ...styles.menuEditCard, opacity: item.paused ? 0.6 : 1 }}>
+
+                {/* Header: nombre + botones — layout diferente en edit vs view */}
+                {isEditing ? (
+                  // EDIT MODE: nombre arriba full-width, botones abajo
+                  <div style={{ marginBottom: '1rem' }}>
+                    <input
+                      value={item.name}
+                      onChange={(e) => handleItemChange(item.id, 'name', e.target.value)}
+                      style={styles.inputName}
+                      placeholder="Ej: NUEVA BURGER"
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
+                      <button onClick={() => { setEditingId(null); saveMenuData(menuItems); }} className="admin-icon-btn" style={styles.iconBtn} title="Guardar y cerrar">
+                        <Check size={20} color="#333" />
+                      </button>
+                      <button onClick={() => togglePause(item.id)} className="admin-icon-btn" style={styles.iconBtn} title={item.paused ? 'Reanudar' : 'Pausar'}>
+                        {item.paused ? <Play size={20} color="#666" /> : <Pause size={20} color="#666" />}
+                      </button>
+                      <button onClick={() => deleteItem(item.id)} className="admin-icon-btn" style={styles.iconBtn} title="Eliminar">
+                        <Trash size={20} color="#999" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  // VIEW MODE: nombre y botones en fila
+                  <div style={styles.menuHeader}>
+                    <h2 style={{ margin: 0, fontSize: '1.4rem', flex: 1 }}>{item.name}</h2>
+                    <div style={styles.actions}>
+                      <button onClick={() => setEditingId(item.id)} className="admin-icon-btn" style={styles.iconBtn} title="Editar">
+                        <Edit2 size={20} color="#333" />
+                      </button>
+                      <button onClick={() => togglePause(item.id)} className="admin-icon-btn" style={styles.iconBtn} title={item.paused ? 'Reanudar' : 'Pausar'}>
+                        {item.paused ? <Play size={20} color="#666" /> : <Pause size={20} color="#666" />}
+                      </button>
+                      <button onClick={() => deleteItem(item.id)} className="admin-icon-btn" style={styles.iconBtn} title="Eliminar">
+                        <Trash size={20} color="#999" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Descripción */}
+                {isEditing ? (
+                  <textarea
+                    value={item.desc}
+                    onChange={(e) => handleItemChange(item.id, 'desc', e.target.value)}
+                    style={styles.inputDesc}
+                    placeholder="Describe los ingredientes..."
+                  />
+                ) : (
+                  <p style={{ margin: '0 0 0.75rem 0', fontWeight: 'bold', fontSize: '0.9rem' }}>{item.desc}</p>
+                )}
+
+                {/* Tags */}
+                {isEditing ? (
+                  <div style={{ marginBottom: '1rem' }}>
+                    <p style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--vak-red)', marginBottom: '6px' }}>ETIQUETAS:</p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                      {PRESET_TAGS.map(tag => {
+                        const active = (item.tags || []).includes(tag);
+                        return (
+                          <button
+                            key={tag}
+                            onClick={() => toggleTag(item.id, tag)}
+                            style={{
+                              padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 700,
+                              border: '2px solid var(--vak-dark)', cursor: 'pointer', fontFamily: 'inherit',
+                              backgroundColor: active ? 'var(--vak-dark)' : 'transparent',
+                              color: active ? '#fff' : 'var(--vak-dark)',
+                            }}
+                          >
+                            {tag}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (item.tags || []).length > 0 && (
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+                    {(item.tags || []).map(tag => (
+                      <span key={tag} style={{ backgroundColor: 'var(--vak-dark)', color: '#fff', padding: '2px 10px', borderRadius: '20px', fontSize: '0.7rem', fontWeight: 700 }}>{tag}</span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Imagen */}
+                {isEditing && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
+                    <label className="admin-icon-btn" style={styles.fileUploadContainer}>
+                      <ImageIcon size={18} color="#555" /> Subir Foto
+                      <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => handleImageUpload(item.id, e)} />
+                    </label>
+                    {item.image && <span style={{ color: 'var(--vak-red)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', fontWeight: 'bold' }}>✓ Imagen cargada</span>}
+                  </div>
+                )}
+
+                {/* Precios */}
+                <div style={styles.priceInputsContainer}>
+                  <p style={{ width: '100%', margin: '0 0 0.5rem 0', fontSize: '0.85rem', fontWeight: 'bold' }}>Variaciones y Precios:</p>
+
+                  {Object.entries(item.prices).map(([size, value]) => (
+                    <div key={size} style={styles.inputGroupWrapper}>
+                      {isEditing ? (
+                        <div style={styles.inputGroup}>
+                          <label style={styles.sizeLabel}>{size.toUpperCase()}</label>
+                          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                            <input
+                              type="number"
+                              placeholder="Ej: 8000"
+                              value={value === null ? '' : value}
+                              onChange={(e) => handlePriceChange(item.id, size, e.target.value)}
+                              style={{ ...styles.priceInput, paddingRight: '40px' }}
+                            />
+                            <button className="admin-icon-btn" style={styles.removeSizeBtn} onClick={() => removeVariation(item.id, size)} title="Borrar variación">
+                              <X size={14} color="#999" />
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={styles.viewSizePill}>
+                          <span style={{ fontWeight: 800 }}>{size.toUpperCase()}</span>
+                          <span>${value?.toLocaleString('es-AR')}</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+
+                  {isEditing && (
+                    <div style={{ marginTop: '12px', width: '100%' }}>
+                      {isAddingVar ? (
+                        <div style={{ padding: '10px', backgroundColor: 'rgba(0,0,0,0.05)', borderRadius: '10px' }}>
+                          <p style={{ margin: '0 0 8px 0', fontSize: '0.8rem', fontWeight: 'bold' }}>NUEVA VARIACIÓN:</p>
+                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              <label style={{ color: 'var(--vak-red)', fontSize: '0.7rem', fontWeight: 'bold' }}>VARIANTE</label>
+                              <input type="text" placeholder="Ej: COMBO" value={newVarName} onChange={(e) => setNewVarName(e.target.value)} style={{ ...styles.varInput, borderRadius: '10px' }} />
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              <label style={{ color: 'var(--vak-red)', fontSize: '0.7rem', fontWeight: 'bold' }}>PRECIO</label>
+                              <input type="number" placeholder="Ej: 5000" value={newVarPrice} onChange={(e) => setNewVarPrice(e.target.value)} style={{ ...styles.varInputSmall, borderRadius: '10px' }} />
+                            </div>
+                            <button className="admin-icon-btn" onClick={() => addVariation(item.id)} style={{ ...styles.addVarBtn, borderRadius: '10px' }}><Check size={20} color="#333" /></button>
+                            <button className="admin-icon-btn" onClick={() => { setIsAddingVar(false); setNewVarName(''); setNewVarPrice(''); }} style={{ ...styles.addVarBtn, borderRadius: '10px' }}><X size={20} color="#999" /></button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button className="admin-icon-btn" onClick={() => setIsAddingVar(true)} style={{ backgroundColor: '#fff', border: 'none', borderRadius: '10px', height: '40px', padding: '0 1rem', display: 'flex', alignItems: 'center', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 2px 5px rgba(0,0,0,0.15)' }}>
+                          <Plus size={16} style={{ marginRight: '6px' }} /> Agregar Variación
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── CONFIGURACIÓN ── */}
       {activeTab === 'config' && (
         <div style={styles.contentArea}>
-          <div style={{ backgroundColor: '#fff', borderRadius: '12px', padding: '1.5rem', boxShadow: '0 4px 10px rgba(0,0,0,0.08)' }}>
-            <h3 style={{ marginBottom: '1.2rem', color: 'var(--vak-dark)' }}>Cambiar credenciales de acceso</h3>
+
+          {/* Precio de envío */}
+          <div style={styles.configCard}>
+            <h3 style={{ marginBottom: '1rem', color: 'var(--vak-dark)' }}>🛵 Precio de envío</h3>
+            <form onSubmit={handleSaveSettings} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxWidth: '320px' }}>
+              <div style={styles.credField}>
+                <label style={styles.credLabel}>Costo de envío a domicilio ($)</label>
+                <input
+                  type="number"
+                  value={settings.deliveryPrice}
+                  onChange={(e) => setSettings(prev => ({ ...prev, deliveryPrice: Number(e.target.value) }))}
+                  style={styles.credInput}
+                  placeholder="Ej: 2000"
+                  min="0"
+                />
+                <span style={{ fontSize: '0.75rem', color: 'gray' }}>Ponelo en 0 si el envío es gratis o variable.</span>
+              </div>
+              {settingsMsg && <p style={{ fontSize: '0.85rem', fontWeight: 600, color: 'green' }}>{settingsMsg}</p>}
+              <button type="submit" style={styles.btnPrimary}>
+                <Save size={16} /> Guardar configuración
+              </button>
+            </form>
+          </div>
+
+          {/* Credenciales */}
+          <div style={styles.configCard}>
+            <h3 style={{ marginBottom: '1rem', color: 'var(--vak-dark)' }}>🔑 Credenciales de acceso</h3>
             <form onSubmit={handleSaveCreds} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxWidth: '320px' }}>
               <div style={styles.credField}>
                 <label style={styles.credLabel}>Contraseña actual</label>
@@ -316,334 +503,123 @@ const AdminView = () => {
                 <input type="password" name="newPassword" value={credsForm.newPassword} onChange={handleCredsChange} style={styles.credInput} placeholder="••••••••" autoComplete="new-password" />
               </div>
               <div style={styles.credField}>
-                <label style={styles.credLabel}>Confirmar nueva contraseña</label>
+                <label style={styles.credLabel}>Confirmar contraseña</label>
                 <input type="password" name="confirm" value={credsForm.confirm} onChange={handleCredsChange} style={styles.credInput} placeholder="••••••••" autoComplete="new-password" />
               </div>
-              {credsMsg && (
-                <p style={{ fontSize: '0.85rem', fontWeight: 600, color: credsMsg.ok ? 'green' : 'var(--vak-red)' }}>
-                  {credsMsg.text}
-                </p>
-              )}
+              {credsMsg && <p style={{ fontSize: '0.85rem', fontWeight: 600, color: credsMsg.ok ? 'green' : 'var(--vak-red)' }}>{credsMsg.text}</p>}
               <button type="submit" style={styles.btnPrimary}>
                 <Save size={16} /> Guardar credenciales
               </button>
             </form>
           </div>
+
         </div>
       )}
 
-      {activeTab === 'menu' && (
-        <div style={styles.contentArea}>
-          <div style={styles.topTools}>
-            <div style={{display: 'flex', gap: '10px', flexWrap: 'wrap'}}>
-              <button style={styles.btnUniform} onClick={addNewItem}><Plus size={16}/> Agregar Hamburguesa</button>
-              <button style={styles.btnUniform} onClick={exportToExcel}><Download size={16}/> Exportar Excel</button>
-              
-              <label style={styles.btnUniformUpload}>
-                <Upload size={16}/> Importar Excel
-                <input type="file" accept=".xlsx, .xls" style={{display: 'none'}} onChange={importFromExcel} />
-              </label>
-            </div>
-            
-            <button style={styles.btnPrimary} onClick={saveMenu}>
-              <Save size={16}/> Guardar Base de Datos
-            </button>
-          </div>
-          
-          <div style={styles.infoBox}>* Usa el botón "Editar" en la tarjeta para asegurarte de no hacer cambios por error. ¡No olvides guardar arriba del todo al finalizar!</div>
-
-          {menuItems.map(item => {
-            const isEditing = editingId === item.id;
-
-            return (
-              <div key={item.id} style={{...styles.menuEditCard, opacity: item.paused ? 0.6 : 1}}>
-                
-                {/* Header Superior y Controles de Tarjeta */}
-                <div style={styles.menuHeader}>
-                  <div style={{display: 'flex', alignItems: 'center', flex: 1}}>
-                    {isEditing ? (
-                      <input 
-                        value={item.name} 
-                        onChange={(e) => handleItemChange(item.id, 'name', e.target.value)}
-                        style={styles.inputName}
-                        placeholder="Ej: NUEVA BURGER"
-                      />
-                    ) : (
-                      <h2 style={{margin: 0, fontSize: '1.5rem'}}>{item.name}</h2>
-                    )}
-                  </div>
-                  
-                  <div style={styles.actions}>
-                    {isEditing ? (
-                       <button 
-                         onClick={() => { setEditingId(null); saveMenuData(menuItems); }} 
-                         className="admin-icon-btn" 
-                         style={styles.iconBtn} 
-                         title="Guardar y Cerrar Edición"
-                       >
-                         <Check size={20} color="#333"/>
-                       </button>
-                    ) : (
-                       <button onClick={() => setEditingId(item.id)} className="admin-icon-btn" style={styles.iconBtn} title="Editar esta hamburguesa">
-                         <Edit2 size={20} color="#333"/>
-                       </button>
-                    )}
-
-                    <button onClick={() => togglePause(item.id)} className="admin-icon-btn" style={styles.iconBtn} title={item.paused ? "Reanudar" : "Pausar"}>
-                      {item.paused ? <Play size={20} color="#666"/> : <Pause size={20} color="#666"/>}
-                    </button>
-                    <button onClick={() => deleteItem(item.id)} className="admin-icon-btn" style={styles.iconBtn} title="Eliminar">
-                      <Trash size={20} color="#999"/>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Área de Descripción */}
-                {isEditing ? (
-                  <textarea 
-                    value={item.desc}
-                    onChange={(e) => handleItemChange(item.id, 'desc', e.target.value)}
-                    style={styles.inputDesc}
-                    placeholder="Describe los ingredientes de la hamburguesa..."
-                  />
-                ) : (
-                  <p style={{margin: '0 0 1rem 0', fontWeight: 'bold'}}>{item.desc}</p>
-                )}
-
-                {/* Subida de Imagen */}
-                {isEditing && (
-                  <div style={{display: 'flex', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem'}}>
-                    <label className="admin-icon-btn" style={styles.fileUploadContainer}>
-                      <ImageIcon size={18} color="#555" /> Subir Foto de Galería
-                      <input type="file" accept="image/*" style={{display: 'none'}} onChange={(e) => handleImageUpload(item.id, e)} />
-                    </label>
-                    {item.image && (
-                       <span style={{color: 'var(--vak-red)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', fontWeight: 'bold'}}>✓ Imagen cargada</span>
-                    )}
-                  </div>
-                )}
-
-                {/* Controles de Precio y Variaciones dinámicas */}
-                <div style={styles.priceInputsContainer}>
-                  <p style={{width: '100%', margin: '0 0 0.5rem 0', fontSize: '0.9rem', fontWeight: 'bold'}}>Variaciones y Precios:</p>
-                  
-                  {Object.entries(item.prices).map(([size, value]) => (
-                    <div key={size} style={styles.inputGroupWrapper}>
-                      {isEditing ? (
-                        <div style={styles.inputGroup}>
-                          <label style={styles.sizeLabel}>{size.toUpperCase()}</label>
-                          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                            <input 
-                              type="number" 
-                              placeholder="Ej: 8000"
-                              value={value === null ? '' : value} 
-                              onChange={(e) => handlePriceChange(item.id, size, e.target.value)}
-                              style={{...styles.priceInput, paddingRight: '40px'}} 
-                            />
-                            <button className="admin-icon-btn" style={styles.removeSizeBtn} onClick={() => removeVariation(item.id, size)} title="Borrar variación">
-                              <X size={14} color="#999" />
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div style={styles.viewSizePill}>
-                          <span style={{fontWeight: 800}}>{size.toUpperCase()}</span>
-                          <span>${value}</span>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-
-                  {/* Creador de nueva variable si estamos editando */}
-                  {isEditing && (
-                    <div style={{marginTop: '15px'}}>
-                      {isAddingVar ? (
-                        <div style={{padding: '10px', backgroundColor: 'rgba(0,0,0,0.05)', borderRadius: '10px', width: 'fit-content'}}>
-                          <p style={{margin: '0 0 10px 0', fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--vak-dark)'}}>AGREGAR NUEVA VARIACIÓN:</p>
-                          <div style={{display: 'flex', gap: '8px', alignItems: 'flex-end'}}>
-                             <div style={{display: 'flex', flexDirection: 'column', gap: '5px'}}>
-                               <label style={{color: 'var(--vak-red)', fontSize:'0.75rem', fontWeight:'bold', paddingLeft: '5px'}}>VARIANTE</label>
-                               <input 
-                                 type="text" 
-                                 placeholder="Ej: COMBO" 
-                                 value={newVarName}
-                                 onChange={(e) => setNewVarName(e.target.value)}
-                                 style={{...styles.varInput, borderRadius: '10px'}}
-                               />
-                             </div>
-                             <div style={{display: 'flex', flexDirection: 'column', gap: '5px'}}>
-                               <label style={{color: 'var(--vak-red)', fontSize:'0.75rem', fontWeight:'bold', paddingLeft: '5px'}}>PRECIO</label>
-                               <input 
-                                 type="number" 
-                                 placeholder="Ej: 5000" 
-                                 value={newVarPrice}
-                                 onChange={(e) => setNewVarPrice(e.target.value)}
-                                 style={{...styles.varInputSmall, borderRadius: '10px'}}
-                               />
-                             </div>
-                             <button className="admin-icon-btn" onClick={() => addVariation(item.id)} style={{...styles.addVarBtn, borderRadius: '10px'}} title="Confirmar">
-                               <Check size={20} color="#333" />
-                             </button>
-                             <button className="admin-icon-btn" onClick={() => { setIsAddingVar(false); setNewVarName(''); setNewVarPrice(''); }} style={{...styles.addVarBtn, borderRadius: '10px'}} title="Cancelar">
-                               <X size={20} color="#999" />
-                             </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <button className="admin-icon-btn" onClick={() => setIsAddingVar(true)} style={{backgroundColor: '#ffffff', color: '#333', border: 'none', borderRadius: '10px', height: '40px', padding: '0 1rem', display: 'flex', alignItems: 'center', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 2px 5px rgba(0,0,0,0.15)'}} title="Agregar nueva variación">
-                          <Plus size={16} color="#333" style={{marginRight: '8px'}} /> Agregar Variación
-                        </button>
-                      )}
-                    </div>
-                  )}
-
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 };
 
 const styles = {
-  adminPage: {
-    padding: '2rem 1rem',
-    backgroundColor: '#fff',
-    minHeight: '80vh',
+  adminPage: { padding: '1.5rem 1rem', backgroundColor: '#fff', minHeight: '80vh' },
+
+  tabs: { display: 'flex', gap: '8px', marginBottom: '1.5rem', flexWrap: 'wrap' },
+  tab: { padding: '0.5rem 0.9rem', borderRadius: '10px', backgroundColor: '#eee', color: '#333', fontWeight: 'bold', fontFamily: 'inherit', fontSize: '0.85rem' },
+  activeTab: { padding: '0.5rem 0.9rem', borderRadius: '10px', backgroundColor: 'var(--vak-red)', color: 'white', fontWeight: 'bold', fontFamily: 'inherit', fontSize: '0.85rem' },
+
+  contentArea: { display: 'flex', flexDirection: 'column', gap: '1.5rem' },
+
+  topTools: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' },
+  infoBox: { fontSize: '0.8rem', color: 'gray', fontStyle: 'italic' },
+
+  btnAddBig: {
+    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+    backgroundColor: 'var(--vak-red)', color: 'white', padding: '1rem',
+    borderRadius: '12px', fontWeight: 900, cursor: 'pointer', fontFamily: 'inherit',
+    fontSize: '1rem', border: 'none', width: '100%',
   },
-  tabs: {
-    display: 'flex',
-    gap: '1rem',
-    marginBottom: '2rem',
-  },
-  tab: {
-    padding: '0.5rem 1rem',
-    borderRadius: '10px',
-    backgroundColor: '#eee',
-    color: '#333',
-    fontWeight: 'bold',
-  },
-  activeTab: {
-    padding: '0.5rem 1rem',
-    borderRadius: '10px',
-    backgroundColor: 'var(--vak-red)',
-    color: 'white',
-    fontWeight: 'bold',
-  },
-  contentArea: {
-    display: 'flex', flexDirection: 'column', gap: '1.5rem',
-  },
-  topTools: {
-    display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem'
-  },
-  infoBox: {
-    fontSize: '0.8rem', color: 'gray', fontStyle: 'italic', marginBottom: '0.5rem'
-  },
-  // UNIFIED BUTTON STYLES
   btnUniform: {
     display: 'flex', alignItems: 'center', gap: '5px',
-    backgroundColor: 'var(--vak-dark)', color: 'white', padding: '0.6rem 1rem', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer',
-    fontFamily: 'inherit'
+    backgroundColor: 'var(--vak-dark)', color: 'white', padding: '0.6rem 1rem',
+    borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'inherit', border: 'none',
   },
   btnUniformUpload: {
     display: 'flex', alignItems: 'center', gap: '5px',
-    backgroundColor: 'var(--vak-dark)', color: 'white', padding: '0.6rem 1rem', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer',
-    fontFamily: 'inherit'
+    backgroundColor: 'var(--vak-dark)', color: 'white', padding: '0.6rem 1rem',
+    borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'inherit',
   },
   btnPrimary: {
     display: 'flex', alignItems: 'center', gap: '5px',
-    backgroundColor: 'var(--vak-red)', color: 'white', padding: '0.6rem 1rem', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer',
-    fontFamily: 'inherit'
-  },
-
-  orderCard: {
-    border: '1px solid #eee', borderLeft: '4px solid var(--vak-red)', padding: '1rem', borderRadius: '8px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)',
-  },
-  statusBadge: (status) => ({
-    backgroundColor: status === 'COMPLETADO' ? 'green' : 'orange', color: 'white', padding: '0.2rem 0.5rem', borderRadius: '10px', fontSize: '0.8rem', fontWeight: 'bold',
-  }),
-
-  // BURGER CARD ADMIN STYLES
-  menuEditCard: {
-    padding: '1.5rem', borderRadius: '12px', backgroundColor: 'var(--vak-bg)', color: 'var(--vak-dark)', boxShadow: '0 4px 10px rgba(0,0,0,0.2)', transition: 'all 0.2s', border: '1px solid var(--vak-red)'
-  },
-  menuHeader: {
-    display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem'
-  },
-  inputName: {
-    fontSize: '1.2rem', fontWeight: '900', border: 'none', padding: '0.6rem', borderRadius: '10px', flex: 1, marginRight: '10px', color: 'var(--vak-dark)'
-  },
-  iconBtn: {
-    padding: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#ffffff', border: 'none', borderRadius: '10px', marginLeft: '10px', boxShadow: '0 2px 5px rgba(0,0,0,0.15)', cursor: 'pointer', width: '40px', height: '40px'
-  },
-  actions: {
-    display: 'flex'
-  },
-  inputDesc: {
-    width: '100%', padding: '0.6rem', border: 'none', borderRadius: '10px', marginBottom: '10px', fontFamily: 'inherit', fontWeight: '600', color: 'var(--vak-dark)', resize: 'none', height: '60px'
-  },
-  fileUploadContainer: {
-    display: 'flex', alignItems: 'center', gap: '5px', backgroundColor: '#ffffff', padding: '0.6rem 1rem', borderRadius: '10px', fontSize: '0.85rem', fontWeight: 'bold', cursor: 'pointer', color: '#555', boxShadow: '0 2px 5px rgba(0,0,0,0.15)'
-  },
-  priceInputsContainer: {
-    display: 'flex', gap: '0.5rem', flexWrap: 'wrap', backgroundColor: 'rgba(0,0,0,0.1)', padding: '1rem', borderRadius: '10px'
-  },
-  inputGroupWrapper: {
-    display: 'flex', alignItems: 'flex-end', position: 'relative'
-  },
-  inputGroup: {
-    display: 'flex', flexDirection: 'column', gap: '5px',
-  },
-  sizeLabel: {
-    color: 'var(--vak-red)', fontSize:'0.8rem', fontWeight:'bold'
-  },
-  priceInput: {
-    padding: '0.6rem', border: 'none', borderRadius: '10px', fontWeight: 'bold', width: '110px', color: 'var(--vak-dark)'
-  },
-  removeSizeBtn: {
-    backgroundColor: 'transparent',
-    color: '#999', 
-    borderRadius: '50%', 
-    width: '24px', 
-    height: '24px', 
-    display: 'flex', 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    border: 'none', 
-    position: 'absolute', 
-    right: '5px', 
-    cursor: 'pointer'
-  },
-  viewSizePill: {
-    backgroundColor: 'white', color: 'var(--vak-red)', padding: '0.4rem 0.8rem', borderRadius: '10px', display: 'flex', gap: '10px', alignItems: 'center'
-  },
-  addVariationBox: {
-    display: 'flex', gap: '0', alignItems: 'flex-end', boxShadow: '0 2px 5px rgba(0,0,0,0.15)', borderRadius: '10px'
-  },
-  varInput: {
-    padding: '0.6rem', border: 'none', fontWeight: 'bold', width: '130px', color: 'var(--vak-dark)', boxSizing: 'border-box', height: '40px'
-  },
-  varInputSmall: {
-    padding: '0.6rem', border: 'none', fontWeight: 'bold', width: '90px', color: 'var(--vak-dark)', boxSizing: 'border-box', height: '40px'
-  },
-  addVarBtn: {
-    backgroundColor: '#ffffff', color: '#333', border: 'none', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 5px rgba(0,0,0,0.15)', boxSizing: 'border-box'
+    backgroundColor: 'var(--vak-red)', color: 'white', padding: '0.6rem 1rem',
+    borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'inherit', border: 'none',
   },
   btnLogout: {
     display: 'flex', alignItems: 'center', gap: '6px',
-    backgroundColor: '#f0f0f0', color: '#555', padding: '0.5rem 0.9rem', borderRadius: '10px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem'
+    backgroundColor: '#f0f0f0', color: '#555', padding: '0.5rem 0.9rem',
+    borderRadius: '10px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem', border: 'none',
   },
-  credField: {
-    display: 'flex', flexDirection: 'column', gap: '5px',
+
+  orderCard: {
+    border: '1px solid #eee', borderLeft: '4px solid var(--vak-red)',
+    padding: '1rem', borderRadius: '8px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)',
   },
-  credLabel: {
-    fontSize: '0.8rem', fontWeight: 700, color: 'var(--vak-red)', paddingLeft: '4px',
+  statusBadge: (status) => ({
+    backgroundColor: status === 'COMPLETADO' ? 'green' : 'orange',
+    color: 'white', padding: '0.2rem 0.5rem', borderRadius: '10px', fontSize: '0.8rem', fontWeight: 'bold',
+  }),
+
+  menuEditCard: {
+    padding: '1.25rem', borderRadius: '12px', backgroundColor: 'var(--vak-bg)',
+    color: 'var(--vak-dark)', boxShadow: '0 4px 10px rgba(0,0,0,0.15)', border: '1px solid var(--vak-red)',
   },
-  credInput: {
-    padding: '0.65rem 1rem', borderRadius: '10px', border: '1px solid #e0e0e0', fontSize: '0.95rem', fontFamily: 'inherit', color: 'var(--vak-dark)', outline: 'none',
+  menuHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' },
+  inputName: {
+    fontSize: '1.1rem', fontWeight: 900, border: 'none', padding: '0.6rem',
+    borderRadius: '10px', width: '100%', color: 'var(--vak-dark)', fontFamily: 'inherit',
   },
+  iconBtn: {
+    padding: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#fff', border: 'none', borderRadius: '10px', marginLeft: '6px',
+    boxShadow: '0 2px 5px rgba(0,0,0,0.15)', cursor: 'pointer', width: '38px', height: '38px',
+    flexShrink: 0,
+  },
+  actions: { display: 'flex', flexShrink: 0 },
+
+  inputDesc: {
+    width: '100%', padding: '0.6rem', border: 'none', borderRadius: '10px',
+    marginBottom: '10px', fontFamily: 'inherit', fontWeight: 600, color: 'var(--vak-dark)',
+    resize: 'none', height: '60px',
+  },
+  fileUploadContainer: {
+    display: 'flex', alignItems: 'center', gap: '5px', backgroundColor: '#fff',
+    padding: '0.6rem 1rem', borderRadius: '10px', fontSize: '0.85rem', fontWeight: 'bold',
+    cursor: 'pointer', color: '#555', boxShadow: '0 2px 5px rgba(0,0,0,0.15)',
+  },
+  priceInputsContainer: {
+    display: 'flex', gap: '0.5rem', flexWrap: 'wrap',
+    backgroundColor: 'rgba(0,0,0,0.07)', padding: '1rem', borderRadius: '10px',
+  },
+  inputGroupWrapper: { display: 'flex', alignItems: 'flex-end', position: 'relative' },
+  inputGroup: { display: 'flex', flexDirection: 'column', gap: '4px' },
+  sizeLabel: { color: 'var(--vak-red)', fontSize: '0.75rem', fontWeight: 'bold' },
+  priceInput: { padding: '0.6rem', border: 'none', borderRadius: '10px', fontWeight: 'bold', width: '110px', color: 'var(--vak-dark)' },
+  removeSizeBtn: {
+    backgroundColor: 'transparent', color: '#999', borderRadius: '50%',
+    width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    border: 'none', position: 'absolute', right: '5px', cursor: 'pointer',
+  },
+  viewSizePill: {
+    backgroundColor: 'white', color: 'var(--vak-red)', padding: '0.4rem 0.8rem',
+    borderRadius: '10px', display: 'flex', gap: '10px', alignItems: 'center',
+  },
+  varInput: { padding: '0.6rem', border: 'none', fontWeight: 'bold', width: '120px', color: 'var(--vak-dark)', height: '40px' },
+  varInputSmall: { padding: '0.6rem', border: 'none', fontWeight: 'bold', width: '90px', color: 'var(--vak-dark)', height: '40px' },
+  addVarBtn: { backgroundColor: '#fff', border: 'none', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 5px rgba(0,0,0,0.15)' },
+
+  configCard: { backgroundColor: '#fff', borderRadius: '12px', padding: '1.5rem', boxShadow: '0 4px 10px rgba(0,0,0,0.08)' },
+  credField: { display: 'flex', flexDirection: 'column', gap: '5px' },
+  credLabel: { fontSize: '0.8rem', fontWeight: 700, color: 'var(--vak-red)', paddingLeft: '4px' },
+  credInput: { padding: '0.65rem 1rem', borderRadius: '10px', border: '1px solid #e0e0e0', fontSize: '0.95rem', fontFamily: 'inherit', color: 'var(--vak-dark)', outline: 'none' },
 };
 
 export default AdminView;
