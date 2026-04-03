@@ -169,6 +169,26 @@ const AdminView = () => {
     reader.readAsDataURL(file);
   };
 
+  const handleBannerImage = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 800; // un poco más grande para el banner
+        const scale = MAX_WIDTH / img.width;
+        canvas.width = scale < 1 ? MAX_WIDTH : img.width;
+        canvas.height = scale < 1 ? img.height * scale : img.height;
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        setSettings(prev => ({ ...prev, bannerPromoImage: canvas.toDataURL('image/jpeg', 0.8) }));
+      };
+      img.src = evt.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+
   // ── Excel ─────────────────────────────────────────────────
   const exportToExcel = () => {
     const ws = XLSX.utils.json_to_sheet(menuItems.map(item => ({
@@ -574,6 +594,29 @@ const AdminView = () => {
       {/* ── CONFIGURACIÓN ── */}
       {activeTab === 'config' && (
         <div style={styles.contentArea}>
+
+          {/* Banner Promo */}
+          <div style={styles.configCard}>
+             <h3 style={{ marginBottom: '1rem', color: 'var(--vak-dark)' }}>🖼️ Banner Principal</h3>
+             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxWidth: '320px' }}>
+                <div style={styles.credField}>
+                  <label style={styles.credLabel}>Título Grande</label>
+                  <input type="text" value={settings.bannerTitle} onChange={(e) => setSettings(prev => ({ ...prev, bannerTitle: e.target.value }))} style={styles.credInput} placeholder="MENÚ" />
+                </div>
+                <div style={styles.credField}>
+                  <label style={styles.credLabel}>Subtítulo / Mes</label>
+                  <input type="text" value={settings.bannerSubtitle} onChange={(e) => setSettings(prev => ({ ...prev, bannerSubtitle: e.target.value }))} style={styles.credInput} placeholder="ENERO" />
+                </div>
+                <div style={styles.credField}>
+                   <label style={styles.credLabel}>Foto Promo</label>
+                   <label className="admin-icon-btn" style={{ ...styles.fileUploadContainer, width: 'fit-content' }}>
+                      <ImageIcon size={18} color="#555" /> Cambiar Foto Banner
+                      <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleBannerImage} />
+                   </label>
+                   {settings.bannerPromoImage && <img src={settings.bannerPromoImage} alt="Banner Preview" style={{ width: '100%', height: '80px', objectFit: 'cover', borderRadius: '10px', marginTop: '10px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }} />}
+                </div>
+             </div>
+          </div>
 
           {/* Zona de envío */}
           <div style={styles.configCard}>

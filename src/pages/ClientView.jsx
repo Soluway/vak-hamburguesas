@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import BurgerCard from '../components/BurgerCard';
-import { getMenuData } from '../data/menu';
+import { getMenuData, getSettings } from '../data/menu';
 
 const ClientView = () => {
   const [menu, setMenu] = useState([]);
   const [activeTag, setActiveTag] = useState('TODOS');
+  const [settings, setSettings] = useState(getSettings());
 
   useEffect(() => {
     const storedMenu = getMenuData();
     setMenu(storedMenu.filter(item => !item.paused));
+    setSettings(getSettings());
   }, []);
 
   // Recolectar todos los tags únicos del menú
@@ -28,8 +30,8 @@ const ClientView = () => {
         <div style={styles.banner}>
           <div style={styles.bannerTextContainer}>
             <div style={styles.bannerTitleRow}>
-              <span style={styles.bannerTitle}>MENÚ</span>
-              <span style={styles.bannerSubtitle}>ENERO</span>
+              <span style={styles.bannerTitle}>{settings.bannerTitle || 'MENÚ'}</span>
+              <span style={styles.bannerSubtitle}>{settings.bannerSubtitle || 'ENERO'}</span>
             </div>
             <div style={styles.bannerSeparator}></div>
             <div style={styles.bannerPapas}>
@@ -39,7 +41,9 @@ const ClientView = () => {
             </div>
           </div>
           <div style={styles.bannerImageContainer}>
-            {/* Banner image removed to avoid overriding the "Menú" banner with burger photos */}
+            {settings.bannerPromoImage && (
+              <img src={settings.bannerPromoImage} alt="Promo" style={styles.bannerImage} />
+            )}
           </div>
         </div>
       </div>

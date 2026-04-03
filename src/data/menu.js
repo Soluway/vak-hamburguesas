@@ -77,15 +77,22 @@ export const saveMenuData = (data) => {
 };
 
 export const getSettings = () => {
-  const stored = localStorage.getItem('vak_settings');
-  if (stored) return JSON.parse(stored);
-  return {
+  const baseDefaults = {
     deliveryPrice: 0,
     storeAddress: '',
     storeCoords: { lat: -34.7167, lng: -58.2833 },
     storeZone: 'Bernal',
     deliveryRadiusKm: 4,
+    bannerTitle: 'MENÚ',
+    bannerSubtitle: 'ENERO',
+    bannerPromoImage: '',
   };
+
+  const stored = localStorage.getItem('vak_settings');
+  if (stored) {
+    return { ...baseDefaults, ...JSON.parse(stored) };
+  }
+  return baseDefaults;
 };
 
 export const saveSettings = (data) => {
