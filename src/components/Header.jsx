@@ -10,11 +10,10 @@ const Header = () => {
   return (
     <header style={styles.header}>
       <Link to="/" style={styles.logoContainer}>
-        {/* Usamos un texto estilizado simulando el logo. Podés reemplazar esta etiqueta con un <img src="/logo.png" /> */}
-        <h1 style={styles.logoText}>VA-K</h1>
+        <img src="/vak-hamburguesas/logo.png" alt="VAK Hamburguesas" style={styles.logo} />
       </Link>
-      
-      <button 
+
+      <button
         style={styles.cartButton}
         onClick={() => setIsCartOpen(true)}
       >
@@ -34,24 +33,22 @@ const styles = {
     justifyContent: 'center',
     alignItems: 'center',
     padding: '2rem 1rem',
-    position: 'relative',
+    position: 'sticky',
+    top: 0,
+    zIndex: 200,
     borderBottomLeftRadius: '20px',
     borderBottomRightRadius: '20px',
-    boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
   },
   logoContainer: {
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  logoText: {
-    fontFamily: 'Inter, sans-serif',
-    fontWeight: 900,
-    fontSize: '4rem',
-    color: 'var(--vak-white)',
-    letterSpacing: '-2px',
-    transform: 'rotate(-3deg)',
-    textShadow: '2px 2px 0px rgba(0,0,0,0.2)',
+  logo: {
+    height: '70px',
+    objectFit: 'contain',
+    filter: 'drop-shadow(2px 2px 4px rgba(0,0,0,0.25))',
   },
   cartButton: {
     position: 'absolute',
@@ -60,8 +57,8 @@ const styles = {
     transform: 'translateY(-50%)',
     backgroundColor: 'rgba(255,255,255,0.2)',
     borderRadius: '50%',
-    width: '45px',
-    height: '45px',
+    width: '48px',
+    height: '48px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -69,8 +66,8 @@ const styles = {
   },
   badge: {
     position: 'absolute',
-    top: '-5px',
-    right: '-5px',
+    top: '-4px',
+    right: '-4px',
     backgroundColor: '#ffffff',
     color: 'var(--vak-red)',
     fontWeight: 'bold',
@@ -81,7 +78,7 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     fontSize: '0.75rem',
-  }
+  },
 };
 
 export default Header;

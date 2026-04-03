@@ -79,7 +79,13 @@ export const saveMenuData = (data) => {
 export const getSettings = () => {
   const stored = localStorage.getItem('vak_settings');
   if (stored) return JSON.parse(stored);
-  return { deliveryPrice: 0 };
+  return {
+    deliveryPrice: 0,
+    storeAddress: '',
+    storeCoords: { lat: -34.7167, lng: -58.2833 },
+    storeZone: 'Bernal',
+    deliveryRadiusKm: 4,
+  };
 };
 
 export const saveSettings = (data) => {

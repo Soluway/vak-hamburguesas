@@ -10,18 +10,22 @@ const TAG_COLORS = {
   DEFAULT:  { bg: 'var(--vak-dark)', color: '#fff' },
 };
 
-const tagStyle = (tag) => {
+const TagPill = ({ tag }) => {
   const c = TAG_COLORS[tag] || TAG_COLORS.DEFAULT;
-  return {
-    backgroundColor: c.bg,
-    color: c.color,
-    padding: '3px 10px',
-    borderRadius: '20px',
-    fontSize: '0.7rem',
-    fontWeight: 800,
-    letterSpacing: '0.5px',
-    display: 'inline-block',
-  };
+  return (
+    <span style={{
+      backgroundColor: c.bg,
+      color: c.color,
+      padding: '3px 10px',
+      borderRadius: '20px',
+      fontSize: '0.65rem',
+      fontWeight: 800,
+      letterSpacing: '0.5px',
+      whiteSpace: 'nowrap',
+    }}>
+      {tag}
+    </span>
+  );
 };
 
 const BurgerCard = ({ product }) => {
@@ -42,25 +46,20 @@ const BurgerCard = ({ product }) => {
     <div style={styles.card}>
       <div style={styles.topSection}>
         <div style={styles.textColumn}>
+          {/* Título + tags en la misma fila */}
           <div style={styles.headerRow}>
             <h2 style={styles.title}>
               <span style={styles.titleBold}>{firstLetter}</span>
               <span style={styles.titleLight}>{restName}</span>
             </h2>
-            {activeTags.includes('VEGGIE') && (
-              <div style={styles.veggieBadge}>VEGGIE</div>
+            {activeTags.length > 0 && (
+              <div style={styles.tagsRow}>
+                {activeTags.map(tag => <TagPill key={tag} tag={tag} />)}
+              </div>
             )}
           </div>
 
           <p style={styles.description}>{desc}</p>
-
-          {activeTags.filter(t => t !== 'VEGGIE').length > 0 && (
-            <div style={styles.tagsRow}>
-              {activeTags.filter(t => t !== 'VEGGIE').map(tag => (
-                <span key={tag} style={tagStyle(tag)}>{tag}</span>
-              ))}
-            </div>
-          )}
         </div>
 
         {product.image && (
@@ -122,8 +121,10 @@ const styles = {
   },
   headerRow: {
     display: 'flex',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: '10px',
+    flexWrap: 'wrap',
+    marginBottom: '0.75rem',
   },
   title: {
     color: 'var(--vak-red)',
@@ -131,43 +132,27 @@ const styles = {
     textTransform: 'uppercase',
     letterSpacing: '-1px',
     margin: 0,
+    lineHeight: 1,
   },
   titleBold:  { fontWeight: 900 },
   titleLight: { fontWeight: 400 },
-  veggieBadge: {
-    backgroundColor: TAG_COLORS.VEGGIE.bg,
-    color: TAG_COLORS.VEGGIE.color,
-    padding: '0.5rem',
-    borderRadius: '50%',
-    width: '60px',
-    height: '60px',
+  tagsRow: {
     display: 'flex',
-    justifyContent: 'center',
+    gap: '5px',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    fontSize: '0.7rem',
-    fontWeight: 'bold',
-    transform: 'rotate(-10deg)',
-    flexShrink: 0,
   },
   description: {
     fontSize: '0.9rem',
     fontWeight: 600,
-    marginTop: '1rem',
-    marginBottom: '0.75rem',
+    marginBottom: '1.25rem',
     lineHeight: '1.4',
-  },
-  tagsRow: {
-    display: 'flex',
-    gap: '6px',
-    flexWrap: 'wrap',
-    marginBottom: '1rem',
   },
   sizesContainer: {
     display: 'flex',
     justifyContent: 'space-between',
     flexWrap: 'wrap',
     gap: '0.5rem',
-    marginTop: '0.5rem',
   },
   sizeColumn: {
     display: 'flex',

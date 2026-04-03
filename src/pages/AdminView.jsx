@@ -1,11 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getMenuData, saveMenuData, getSettings, saveSettings } from '../data/menu';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Trash, Pause, Play, Plus, Save, Upload, Download, Image as ImageIcon, Edit2, X, Check, LogOut, KeyRound } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import Swal from 'sweetalert2';
 
 const PRESET_TAGS = ['VEGGIE', 'BACON', 'PICANTE', 'ESPECIAL', 'NUEVO'];
+
+const vak = Swal.mixin({
+  confirmButtonColor: '#ea1d2c',
+  cancelButtonColor: '#1f1f1f',
+  borderRadius: '16px',
+  customClass: { popup: 'vak-swal' },
+});
 
 const AdminView = () => {
   const { logout, changeCredentials } = useAuth();
@@ -24,9 +32,15 @@ const AdminView = () => {
   const [credsForm, setCredsForm] = useState({ currentPassword: '', newUsername: '', newPassword: '', confirm: '' });
   const [credsMsg, setCredsMsg] = useState(null);
 
-  // Configuración (precio de envío)
+  // Configuración
   const [settings, setSettings] = useState(getSettings);
   const [settingsMsg, setSettingsMsg] = useState(null);
+  const [geocodingStore, setGeocodingStore] = useState(false);
+  const [gpsStore, setGpsStore] = useState(false);
+
+  // Auto-save menú
+  const [saveStatus, setSaveStatus] = useState(''); // '' | 'guardando' | 'guardado'
+  const isFirstRender = useRef(true);
 
   useEffect(() => {
     const loadOrders = () => {
@@ -38,6 +52,18 @@ const AdminView = () => {
     setMenuItems(getMenuData());
     return () => clearInterval(interval);
   }, []);
+
+  // Auto-save con debounce cada vez que cambia el menú
+  useEffect(() => {
+    if (isFirstRender.current) { isFirstRender.current = false; return; }
+    setSaveStatus('guardando');
+    const timer = setTimeout(() => {
+      saveMenuData(menuItems);
+      setSaveStatus('guardado');
+      setTimeout(() => setSaveStatus(''), 2000);
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [menuItems]);
 
   // ── Pedidos ────────────────────────────────────────────────
   const handleStatusChange = (orderId, newStatus) => {
@@ -90,9 +116,18 @@ const AdminView = () => {
     setMenuItems(prev => prev.map(item => item.id === id ? { ...item, paused: !item.paused } : item));
   };
 
-  const deleteItem = (id) => {
-    if (window.confirm('¿Eliminar definitivamente esta hamburguesa?')) {
-      setMenuItems(prev => prev.filter(item => item.id !== id));
+  const deleteItem = async (id) => {
+    const item = menuItems.find(i => i.id === id);
+    const result = await vak.fire({
+      title: '¿Eliminar hamburguesa?',
+      text: `"${item?.name}" se eliminará del menú.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, eliminar',
+      cancelButtonText: 'Cancelar',
+    });
+    if (result.isConfirmed) {
+      setMenuItems(prev => prev.filter(i => i.id !== id));
       if (editingId === id) setEditingId(null);
     }
   };
@@ -112,11 +147,6 @@ const AdminView = () => {
     setActiveTab('menu');
   };
 
-  const saveMenu = () => {
-    saveMenuData(menuItems);
-    setEditingId(null);
-    alert('¡Cambios guardados con éxito!');
-  };
 
   // ── Imágenes ──────────────────────────────────────────────
   const handleImageUpload = (id, e) => {
@@ -203,6 +233,76 @@ const AdminView = () => {
   const handleLogout = () => { logout(); navigate('/admin/login'); };
 
   // ── Configuración ─────────────────────────────────────────
+  const geocodeStoreAddress = async () => {
+    if (!settings.storeAddress?.trim()) return;
+    setGeocodingStore(true);
+    try {
+      const query = encodeURIComponent(settings.storeAddress);
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1&addressdetails=1`,
+        { headers: { 'Accept-Language': 'es' } }
+      );
+      const data = await res.json();
+      if (!data.length) {
+        vak.fire({ icon: 'error', title: 'Dirección no encontrada', text: 'Intentá ser más específico.', confirmButtonText: 'OK' });
+        return;
+      }
+      const coords = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+      const addr = data[0].address || {};
+      const zone = addr.suburb || addr.neighbourhood || addr.city_district || addr.town || addr.city || 'la zona';
+      const updated = { ...settings, storeCoords: coords, storeZone: zone };
+      setSettings(updated);
+      saveSettings(updated);
+      setSettingsMsg('¡Dirección del local verificada y guardada!');
+      setTimeout(() => setSettingsMsg(null), 3000);
+    } catch {
+      vak.fire({ icon: 'error', title: 'Error de conexión', text: 'No se pudo verificar la dirección.', confirmButtonText: 'OK' });
+    } finally {
+      setGeocodingStore(false);
+    }
+  };
+
+  const useGPSStore = () => {
+    if (!navigator.geolocation) {
+      vak.fire({ icon: 'error', title: 'Sin GPS', text: 'Tu dispositivo no soporta geolocalización.', confirmButtonText: 'OK' });
+      return;
+    }
+    setGpsStore(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const { latitude: lat, longitude: lng } = pos.coords;
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`,
+            { headers: { 'Accept-Language': 'es' } }
+          );
+          const data = await res.json();
+          const addr = data.address || {};
+          const road = addr.road || addr.pedestrian || '';
+          const number = addr.house_number ? ` ${addr.house_number}` : '';
+          const displayAddr = road ? `${road}${number}` : data.display_name?.split(',')[0] || '';
+          const zone = addr.suburb || addr.neighbourhood || addr.city_district || addr.town || addr.city || 'la zona';
+          const coords = { lat, lng };
+          const updated = { ...settings, storeAddress: displayAddr, storeCoords: coords, storeZone: zone };
+          setSettings(updated);
+          saveSettings(updated);
+          setSettingsMsg(`¡Ubicación del local guardada! Zona: ${zone}`);
+          setTimeout(() => setSettingsMsg(null), 3000);
+        } catch {
+          vak.fire({ icon: 'error', title: 'Error', text: 'No se pudo obtener la ubicación.', confirmButtonText: 'OK' });
+        } finally {
+          setGpsStore(false);
+        }
+      },
+      (err) => {
+        setGpsStore(false);
+        const msgs = { 1: 'Permiso denegado. Activá el GPS.', 2: 'No se pudo obtener la ubicación.', 3: 'Tiempo de espera agotado.' };
+        vak.fire({ icon: 'error', title: 'Error de GPS', text: msgs[err.code] || 'Error desconocido.', confirmButtonText: 'OK' });
+      },
+      { timeout: 10000, enableHighAccuracy: true }
+    );
+  };
+
   const handleSaveSettings = (e) => {
     e.preventDefault();
     saveSettings(settings);
@@ -288,12 +388,13 @@ const AdminView = () => {
                 <input type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={importFromExcel} />
               </label>
             </div>
-            <button style={styles.btnPrimary} onClick={saveMenu}>
-              <Save size={16} /> Guardar Menú
-            </button>
+            <span style={styles.saveIndicator}>
+              {saveStatus === 'guardando' && '⏳ Guardando...'}
+              {saveStatus === 'guardado' && '✓ Guardado'}
+            </span>
           </div>
 
-          <div style={styles.infoBox}>Tocá el ícono ✏️ de cada tarjeta para editar. Guardá con el botón rojo al terminar.</div>
+          <div style={styles.infoBox}>Los cambios se guardan automáticamente. Tocá ✏️ en cada tarjeta para editar.</div>
 
           {/* Cards de hamburguesas */}
           {menuItems.map(item => {
@@ -312,7 +413,7 @@ const AdminView = () => {
                       placeholder="Ej: NUEVA BURGER"
                     />
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
-                      <button onClick={() => { setEditingId(null); saveMenuData(menuItems); }} className="admin-icon-btn" style={styles.iconBtn} title="Guardar y cerrar">
+                      <button onClick={() => setEditingId(null)} className="admin-icon-btn" style={styles.iconBtn} title="Cerrar edición">
                         <Check size={20} color="#333" />
                       </button>
                       <button onClick={() => togglePause(item.id)} className="admin-icon-btn" style={styles.iconBtn} title={item.paused ? 'Reanudar' : 'Pausar'}>
@@ -474,27 +575,81 @@ const AdminView = () => {
       {activeTab === 'config' && (
         <div style={styles.contentArea}>
 
-          {/* Precio de envío */}
+          {/* Zona de envío */}
           <div style={styles.configCard}>
-            <h3 style={{ marginBottom: '1rem', color: 'var(--vak-dark)' }}>🛵 Precio de envío</h3>
-            <form onSubmit={handleSaveSettings} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxWidth: '320px' }}>
+            <h3 style={{ marginBottom: '0.25rem', color: 'var(--vak-dark)' }}>📍 Zona de envío</h3>
+            <p style={{ fontSize: '0.8rem', color: 'gray', marginBottom: '1rem' }}>
+              Definí la dirección del local y el radio de cobertura. Los clientes fuera de esa zona no podrán pedir envío.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxWidth: '360px' }}>
               <div style={styles.credField}>
-                <label style={styles.credLabel}>Costo de envío a domicilio ($)</label>
+                <label style={styles.credLabel}>Dirección del local</label>
+                {/* GPS button */}
+                <button
+                  type="button"
+                  onClick={useGPSStore}
+                  disabled={gpsStore}
+                  style={{ ...styles.btnUniform, width: '100%', justifyContent: 'center', marginBottom: '8px', opacity: gpsStore ? 0.6 : 1 }}
+                >
+                  📍 {gpsStore ? 'Detectando ubicación...' : 'Usar mi ubicación actual'}
+                </button>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="text"
+                    value={settings.storeAddress || ''}
+                    onChange={(e) => setSettings(prev => ({ ...prev, storeAddress: e.target.value }))}
+                    style={{ ...styles.credInput, flex: 1 }}
+                    placeholder="Ej: Av. Calchaquí 1000, Bernal"
+                    onKeyDown={(e) => e.key === 'Enter' && geocodeStoreAddress()}
+                  />
+                  <button
+                    type="button"
+                    onClick={geocodeStoreAddress}
+                    disabled={geocodingStore || !settings.storeAddress?.trim()}
+                    style={{ ...styles.btnUniform, flexShrink: 0, opacity: geocodingStore ? 0.6 : 1 }}
+                  >
+                    {geocodingStore ? '...' : 'Verificar'}
+                  </button>
+                </div>
+                {settings.storeCoords && settings.storeAddress && (
+                  <span style={{ fontSize: '0.75rem', color: '#2e7d32', fontWeight: 600 }}>
+                    ✓ Zona detectada: <strong>{settings.storeZone}</strong> ({settings.storeCoords.lat.toFixed(4)}, {settings.storeCoords.lng.toFixed(4)})
+                  </span>
+                )}
+              </div>
+
+              <div style={styles.credField}>
+                <label style={styles.credLabel}>Radio de cobertura (km)</label>
                 <input
                   type="number"
-                  value={settings.deliveryPrice}
+                  value={settings.deliveryRadiusKm ?? 4}
+                  onChange={(e) => setSettings(prev => ({ ...prev, deliveryRadiusKm: Number(e.target.value) }))}
+                  style={styles.credInput}
+                  placeholder="Ej: 4"
+                  min="1"
+                  max="30"
+                />
+                <span style={{ fontSize: '0.75rem', color: 'gray' }}>Radio en kilómetros desde el local.</span>
+              </div>
+
+              <div style={styles.credField}>
+                <label style={styles.credLabel}>Costo de envío ($)</label>
+                <input
+                  type="number"
+                  value={settings.deliveryPrice ?? 0}
                   onChange={(e) => setSettings(prev => ({ ...prev, deliveryPrice: Number(e.target.value) }))}
                   style={styles.credInput}
                   placeholder="Ej: 2000"
                   min="0"
                 />
-                <span style={{ fontSize: '0.75rem', color: 'gray' }}>Ponelo en 0 si el envío es gratis o variable.</span>
+                <span style={{ fontSize: '0.75rem', color: 'gray' }}>Ponelo en 0 si el envío es gratis.</span>
               </div>
-              {settingsMsg && <p style={{ fontSize: '0.85rem', fontWeight: 600, color: 'green' }}>{settingsMsg}</p>}
-              <button type="submit" style={styles.btnPrimary}>
+
+              {settingsMsg && <p style={{ fontSize: '0.85rem', fontWeight: 600, color: '#2e7d32' }}>{settingsMsg}</p>}
+              <button type="button" onClick={handleSaveSettings} style={styles.btnPrimary}>
                 <Save size={16} /> Guardar configuración
               </button>
-            </form>
+            </div>
           </div>
 
           {/* Credenciales */}
@@ -542,6 +697,7 @@ const styles = {
 
   topTools: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' },
   infoBox: { fontSize: '0.8rem', color: 'gray', fontStyle: 'italic' },
+  saveIndicator: { fontSize: '0.85rem', fontWeight: 700, color: '#2e7d32', display: 'flex', alignItems: 'center' },
 
   btnAddBig: {
     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
