@@ -4,8 +4,16 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Trash, Pause, Play, Plus, Save, Upload, Download, Image as ImageIcon, Edit2, X, Check, LogOut, KeyRound } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import Swal from 'sweetalert2';
 
 const PRESET_TAGS = ['VEGGIE', 'BACON', 'PICANTE', 'ESPECIAL', 'NUEVO'];
+
+const vak = Swal.mixin({
+  confirmButtonColor: '#ea1d2c',
+  cancelButtonColor: '#1f1f1f',
+  borderRadius: '16px',
+  customClass: { popup: 'vak-swal' },
+});
 
 const AdminView = () => {
   const { logout, changeCredentials } = useAuth();
@@ -106,9 +114,18 @@ const AdminView = () => {
     setMenuItems(prev => prev.map(item => item.id === id ? { ...item, paused: !item.paused } : item));
   };
 
-  const deleteItem = (id) => {
-    if (window.confirm('¿Eliminar definitivamente esta hamburguesa?')) {
-      setMenuItems(prev => prev.filter(item => item.id !== id));
+  const deleteItem = async (id) => {
+    const item = menuItems.find(i => i.id === id);
+    const result = await vak.fire({
+      title: '¿Eliminar hamburguesa?',
+      text: `"${item?.name}" se eliminará del menú.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, eliminar',
+      cancelButtonText: 'Cancelar',
+    });
+    if (result.isConfirmed) {
+      setMenuItems(prev => prev.filter(i => i.id !== id));
       if (editingId === id) setEditingId(null);
     }
   };
