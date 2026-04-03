@@ -113,6 +113,9 @@ const CartSidebar = () => {
                 <button style={styles.checkoutBtn} onClick={() => setStep('checkout')}>
                   CONTINUAR <MessageCircle size={20} style={{ marginLeft: '10px' }} />
                 </button>
+                <button style={styles.keepShoppingBtn} onClick={handleClose}>
+                  ← Seguir eligiendo
+                </button>
               </div>
             )}
           </>
@@ -305,6 +308,20 @@ const styles = {
     border: 'none',
     cursor: 'pointer',
     fontFamily: 'inherit',
+    marginBottom: '10px',
+  },
+  keepShoppingBtn: {
+    width: '100%',
+    padding: '0.75rem',
+    backgroundColor: 'transparent',
+    color: 'var(--vak-dark)',
+    borderRadius: '10px',
+    fontWeight: 700,
+    fontSize: '0.95rem',
+    border: '2px solid #e0e0e0',
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+    textAlign: 'center',
   },
   summaryBox: {
     backgroundColor: 'var(--vak-bg)',

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getMenuData, saveMenuData, getSettings, saveSettings } from '../data/menu';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -28,6 +28,10 @@ const AdminView = () => {
   const [settings, setSettings] = useState(getSettings);
   const [settingsMsg, setSettingsMsg] = useState(null);
 
+  // Auto-save menú
+  const [saveStatus, setSaveStatus] = useState(''); // '' | 'guardando' | 'guardado'
+  const isFirstRender = useRef(true);
+
   useEffect(() => {
     const loadOrders = () => {
       const stored = JSON.parse(localStorage.getItem('vak_orders') || '[]');
@@ -38,6 +42,18 @@ const AdminView = () => {
     setMenuItems(getMenuData());
     return () => clearInterval(interval);
   }, []);
+
+  // Auto-save con debounce cada vez que cambia el menú
+  useEffect(() => {
+    if (isFirstRender.current) { isFirstRender.current = false; return; }
+    setSaveStatus('guardando');
+    const timer = setTimeout(() => {
+      saveMenuData(menuItems);
+      setSaveStatus('guardado');
+      setTimeout(() => setSaveStatus(''), 2000);
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [menuItems]);
 
   // ── Pedidos ────────────────────────────────────────────────
   const handleStatusChange = (orderId, newStatus) => {
@@ -112,11 +128,6 @@ const AdminView = () => {
     setActiveTab('menu');
   };
 
-  const saveMenu = () => {
-    saveMenuData(menuItems);
-    setEditingId(null);
-    alert('¡Cambios guardados con éxito!');
-  };
 
   // ── Imágenes ──────────────────────────────────────────────
   const handleImageUpload = (id, e) => {
@@ -288,12 +299,13 @@ const AdminView = () => {
                 <input type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={importFromExcel} />
               </label>
             </div>
-            <button style={styles.btnPrimary} onClick={saveMenu}>
-              <Save size={16} /> Guardar Menú
-            </button>
+            <span style={styles.saveIndicator}>
+              {saveStatus === 'guardando' && '⏳ Guardando...'}
+              {saveStatus === 'guardado' && '✓ Guardado'}
+            </span>
           </div>
 
-          <div style={styles.infoBox}>Tocá el ícono ✏️ de cada tarjeta para editar. Guardá con el botón rojo al terminar.</div>
+          <div style={styles.infoBox}>Los cambios se guardan automáticamente. Tocá ✏️ en cada tarjeta para editar.</div>
 
           {/* Cards de hamburguesas */}
           {menuItems.map(item => {
@@ -312,7 +324,7 @@ const AdminView = () => {
                       placeholder="Ej: NUEVA BURGER"
                     />
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
-                      <button onClick={() => { setEditingId(null); saveMenuData(menuItems); }} className="admin-icon-btn" style={styles.iconBtn} title="Guardar y cerrar">
+                      <button onClick={() => setEditingId(null)} className="admin-icon-btn" style={styles.iconBtn} title="Cerrar edición">
                         <Check size={20} color="#333" />
                       </button>
                       <button onClick={() => togglePause(item.id)} className="admin-icon-btn" style={styles.iconBtn} title={item.paused ? 'Reanudar' : 'Pausar'}>
@@ -531,6 +543,7 @@ const styles = {
 
   topTools: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' },
   infoBox: { fontSize: '0.8rem', color: 'gray', fontStyle: 'italic' },
+  saveIndicator: { fontSize: '0.85rem', fontWeight: 700, color: '#2e7d32', display: 'flex', alignItems: 'center' },
 
   btnAddBig: {
     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
