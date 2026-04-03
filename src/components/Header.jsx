@@ -10,7 +10,7 @@ const Header = () => {
   return (
     <header style={styles.header}>
       <Link to="/" style={styles.logoContainer}>
-        <h1 style={styles.logoText}>VA-K</h1>
+        <img src="/vak-hamburguesas/logo.png" alt="VAK Hamburguesas" style={styles.logo} />
       </Link>
 
       <button
@@ -45,14 +45,10 @@ const styles = {
     justifyContent: 'center',
     alignItems: 'center',
   },
-  logoText: {
-    fontFamily: 'Inter, sans-serif',
-    fontWeight: 900,
-    fontSize: '4rem',
-    color: 'var(--vak-white)',
-    letterSpacing: '-2px',
-    transform: 'rotate(-3deg)',
-    textShadow: '2px 2px 0px rgba(0,0,0,0.2)',
+  logo: {
+    height: '70px',
+    objectFit: 'contain',
+    filter: 'drop-shadow(2px 2px 4px rgba(0,0,0,0.25))',
   },
   cartButton: {
     position: 'absolute',

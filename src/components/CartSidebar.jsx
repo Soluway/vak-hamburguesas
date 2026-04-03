@@ -2,14 +2,42 @@ import React, { useState } from 'react';
 import { useCart } from '../context/CartContext';
 import { getSettings } from '../data/menu';
 import { X, Plus, Minus, MessageCircle, ChevronLeft } from 'lucide-react';
+import Swal from 'sweetalert2';
 
 const WA_NUMBER = '5491135889974';
 
+// Centro de Bernal, Quilmes, Buenos Aires
+const BERNAL_CENTER = { lat: -34.7167, lng: -58.2833 };
+const MAX_RADIUS_KM = 4;
+
+const haversineKm = (lat1, lng1, lat2, lng2) => {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
+const geocodeAddress = async (address) => {
+  const query = encodeURIComponent(`${address}, Bernal, Buenos Aires, Argentina`);
+  const res = await fetch(
+    `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`,
+    { headers: { 'Accept-Language': 'es' } }
+  );
+  const data = await res.json();
+  if (!data.length) return null;
+  return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), display: data[0].display_name };
+};
+
 const CartSidebar = () => {
-  const { cart, isCartOpen, setIsCartOpen, removeFromCart, updateQuantity, cartTotal, clearCart } = useCart();
+  const { cart, isCartOpen, setIsCartOpen, updateQuantity, cartTotal, clearCart } = useCart();
   const [step, setStep] = useState('cart'); // 'cart' | 'checkout'
   const [delivery, setDelivery] = useState(''); // 'envio' | 'retiro'
   const [payment, setPayment] = useState(''); // 'transferencia' | 'efectivo'
+  const [address, setAddress] = useState('');
+  const [addressValidated, setAddressValidated] = useState(false);
+  const [checkingAddress, setCheckingAddress] = useState(false);
 
   const { deliveryPrice = 0 } = getSettings();
   const deliveryCost = delivery === 'envio' ? deliveryPrice : 0;
@@ -22,6 +50,61 @@ const CartSidebar = () => {
     setStep('cart');
     setDelivery('');
     setPayment('');
+    setAddress('');
+    setAddressValidated(false);
+  };
+
+  const handleDeliverySelect = (value) => {
+    setDelivery(value);
+    setAddressValidated(false);
+    setAddress('');
+  };
+
+  const validateAddress = async () => {
+    if (!address.trim()) return;
+    setCheckingAddress(true);
+    try {
+      const result = await geocodeAddress(address);
+      if (!result) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Dirección no encontrada',
+          text: 'No pudimos encontrar esa dirección. Intentá ser más específico (ej: "Av. Calchaquí 1234").',
+          confirmButtonColor: '#ea1d2c',
+        });
+        return;
+      }
+      const distKm = haversineKm(BERNAL_CENTER.lat, BERNAL_CENTER.lng, result.lat, result.lng);
+      if (distKm > MAX_RADIUS_KM) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Zona fuera de cobertura',
+          html: `Por el momento solo realizamos envíos en la zona de <strong>Bernal, Buenos Aires</strong>.<br><br>Tu dirección está a ${distKm.toFixed(1)} km de nuestra zona de cobertura.`,
+          confirmButtonColor: '#ea1d2c',
+          confirmButtonText: 'Entendido',
+        });
+        setAddressValidated(false);
+      } else {
+        setAddressValidated(true);
+        Swal.fire({
+          icon: 'success',
+          title: '¡Zona confirmada!',
+          text: `Tu dirección está dentro de la zona de envío de Bernal.`,
+          confirmButtonColor: '#ea1d2c',
+          timer: 2000,
+          showConfirmButton: false,
+        });
+      }
+    } catch {
+      Swal.fire({
+        icon: 'error',
+        title: 'Error de conexión',
+        text: 'No pudimos verificar la dirección. Verificá tu conexión e intentá de nuevo.',
+        confirmButtonColor: '#ea1d2c',
+      });
+    } finally {
+      setCheckingAddress(false);
+    }
   };
 
   const buildWhatsAppMessage = () => {
@@ -31,28 +114,29 @@ const CartSidebar = () => {
     const deliveryLabel = delivery === 'envio' ? '🛵 Envío a domicilio' : '🏠 Retiro en local';
     const paymentLabel = payment === 'transferencia' ? '💳 Transferencia' : '💵 Efectivo';
 
-    const msgLines = [
-      '🍔 *Pedido VAK Hamburguesas*',
-      '',
-      ...lines,
-    ];
-
+    const msgLines = ['🍔 *Pedido VAK Hamburguesas*', '', ...lines];
     if (delivery === 'envio' && deliveryPrice > 0) {
       msgLines.push(`• Envío — ${formatPrice(deliveryPrice)}`);
     }
-
-    msgLines.push('', `*Total: ${formatPrice(grandTotal)}*`, '', `📦 *Entrega:* ${deliveryLabel}`, `💰 *Pago:* ${paymentLabel}`);
-
+    msgLines.push('', `*Total: ${formatPrice(grandTotal)}*`, '', `📦 *Entrega:* ${deliveryLabel}`);
+    if (delivery === 'envio' && address) {
+      msgLines.push(`📍 *Dirección:* ${address}`);
+    }
+    msgLines.push(`💰 *Pago:* ${paymentLabel}`);
     return encodeURIComponent(msgLines.join('\n'));
   };
 
+  const canConfirm = delivery && payment && (delivery === 'retiro' || addressValidated);
+
   const sendToWhatsApp = () => {
-    if (!delivery || !payment) return;
+    if (!canConfirm) return;
     const msg = buildWhatsAppMessage();
     clearCart();
     setStep('cart');
     setDelivery('');
     setPayment('');
+    setAddress('');
+    setAddressValidated(false);
     setIsCartOpen(false);
     window.open(`https://wa.me/${WA_NUMBER}?text=${msg}`, '_blank');
   };
@@ -151,17 +235,47 @@ const CartSidebar = () => {
               <div style={styles.optionGroup}>
                 <button
                   style={delivery === 'envio' ? styles.optionActive : styles.option}
-                  onClick={() => setDelivery('envio')}
+                  onClick={() => handleDeliverySelect('envio')}
                 >
                   🛵 Envío a domicilio
                 </button>
                 <button
                   style={delivery === 'retiro' ? styles.optionActive : styles.option}
-                  onClick={() => setDelivery('retiro')}
+                  onClick={() => handleDeliverySelect('retiro')}
                 >
                   🏠 Retiro en local
                 </button>
               </div>
+
+              {/* Dirección — solo si eligió envío */}
+              {delivery === 'envio' && (
+                <div style={styles.addressBox}>
+                  <p style={styles.sectionLabel}>📍 ¿A dónde enviamos?</p>
+                  <p style={styles.addressNote}>Solo realizamos envíos en <strong>Bernal, Buenos Aires</strong>.</p>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type="text"
+                      placeholder="Ej: Av. Calchaquí 1234"
+                      value={address}
+                      onChange={(e) => { setAddress(e.target.value); setAddressValidated(false); }}
+                      style={{ ...styles.addressInput, borderColor: addressValidated ? '#2e7d32' : '#e0e0e0' }}
+                      onKeyDown={(e) => e.key === 'Enter' && validateAddress()}
+                    />
+                    <button
+                      onClick={validateAddress}
+                      disabled={checkingAddress || !address.trim()}
+                      style={styles.validateBtn}
+                    >
+                      {checkingAddress ? '...' : addressValidated ? '✓' : 'OK'}
+                    </button>
+                  </div>
+                  {addressValidated && (
+                    <p style={{ fontSize: '0.78rem', color: '#2e7d32', fontWeight: 700, marginTop: '4px' }}>
+                      ✓ Dirección dentro de la zona de cobertura
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Pago */}
               <p style={styles.sectionLabel}>¿Cómo pagás?</p>
@@ -179,16 +293,22 @@ const CartSidebar = () => {
                   💵 Efectivo
                 </button>
               </div>
+
             </div>
 
             <div style={styles.footer}>
               <button
-                style={{ ...styles.checkoutBtn, opacity: (!delivery || !payment) ? 0.5 : 1 }}
+                style={{ ...styles.checkoutBtn, opacity: canConfirm ? 1 : 0.45 }}
                 onClick={sendToWhatsApp}
-                disabled={!delivery || !payment}
+                disabled={!canConfirm}
               >
                 ENVIAR POR WHATSAPP <MessageCircle size={20} style={{ marginLeft: '10px' }} />
               </button>
+              {delivery === 'envio' && !addressValidated && address.trim() === '' && (
+                <p style={{ fontSize: '0.78rem', color: '#999', textAlign: 'center', marginTop: '6px' }}>
+                  Ingresá y verificá tu dirección para continuar
+                </p>
+              )}
             </div>
           </>
         )}
@@ -225,158 +345,73 @@ const styles = {
     color: 'var(--vak-red)',
     gap: '8px',
   },
-  backBtn: {
-    color: 'var(--vak-red)',
-    display: 'flex',
-    alignItems: 'center',
-  },
-  closeBtn: {
-    color: 'var(--vak-dark)',
-  },
-  itemsContainer: {
-    flex: 1,
-    overflowY: 'auto',
-    padding: '1.5rem',
-  },
+  backBtn: { color: 'var(--vak-red)', display: 'flex', alignItems: 'center' },
+  closeBtn: { color: 'var(--vak-dark)' },
+  itemsContainer: { flex: 1, overflowY: 'auto', padding: '1.5rem' },
   cartItem: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingBottom: '1rem',
-    marginBottom: '1rem',
-    borderBottom: '1px solid #eee',
+    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+    paddingBottom: '1rem', marginBottom: '1rem', borderBottom: '1px solid #eee',
   },
-  itemInfo: {
-    display: 'flex',
-    flexDirection: 'column',
-  },
-  itemName: {
-    fontWeight: 'bold',
-  },
-  itemSize: {
-    fontSize: '0.8rem',
-    color: 'gray',
-  },
-  itemPrice: {
-    color: 'var(--vak-red)',
-    fontWeight: 'bold',
-    marginTop: '0.2rem',
-  },
+  itemInfo: { display: 'flex', flexDirection: 'column' },
+  itemName: { fontWeight: 'bold' },
+  itemSize: { fontSize: '0.8rem', color: 'gray' },
+  itemPrice: { color: 'var(--vak-red)', fontWeight: 'bold', marginTop: '0.2rem' },
   quantityControls: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-    backgroundColor: 'var(--vak-bg)',
-    borderRadius: '20px',
-    padding: '0.3rem',
+    display: 'flex', alignItems: 'center', gap: '10px',
+    backgroundColor: 'var(--vak-bg)', borderRadius: '20px', padding: '0.3rem',
   },
   qtyBtn: {
-    backgroundColor: 'white',
-    borderRadius: '50%',
-    width: '25px', height: '25px',
+    backgroundColor: 'white', borderRadius: '50%', width: '25px', height: '25px',
     display: 'flex', justifyContent: 'center', alignItems: 'center',
     boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
   },
-  qtyValue: {
-    fontWeight: 'bold',
-    width: '20px',
-    textAlign: 'center',
-  },
-  footer: {
-    padding: '1.5rem',
-    borderTop: '1px solid #eee',
-    backgroundColor: '#fafafa',
-  },
+  qtyValue: { fontWeight: 'bold', width: '20px', textAlign: 'center' },
+  footer: { padding: '1.5rem', borderTop: '1px solid #eee', backgroundColor: '#fafafa' },
   totalRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    fontWeight: '900',
-    fontSize: '1.2rem',
-    marginBottom: '1rem',
+    display: 'flex', justifyContent: 'space-between',
+    fontWeight: '900', fontSize: '1.2rem', marginBottom: '1rem',
   },
   checkoutBtn: {
-    width: '100%',
-    padding: '1rem',
-    backgroundColor: 'var(--vak-red)',
-    color: 'white',
-    borderRadius: '10px',
-    fontWeight: 'bold',
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    fontSize: '1rem',
-    border: 'none',
-    cursor: 'pointer',
-    fontFamily: 'inherit',
-    marginBottom: '10px',
+    width: '100%', padding: '1rem', backgroundColor: 'var(--vak-red)', color: 'white',
+    borderRadius: '10px', fontWeight: 'bold', display: 'flex', justifyContent: 'center',
+    alignItems: 'center', fontSize: '1rem', border: 'none', cursor: 'pointer',
+    fontFamily: 'inherit', marginBottom: '10px',
   },
   keepShoppingBtn: {
-    width: '100%',
-    padding: '0.75rem',
-    backgroundColor: 'transparent',
-    color: 'var(--vak-dark)',
-    borderRadius: '10px',
-    fontWeight: 700,
-    fontSize: '0.95rem',
-    border: '2px solid #e0e0e0',
-    cursor: 'pointer',
-    fontFamily: 'inherit',
-    textAlign: 'center',
+    width: '100%', padding: '0.75rem', backgroundColor: 'transparent',
+    color: 'var(--vak-dark)', borderRadius: '10px', fontWeight: 700,
+    fontSize: '0.95rem', border: '2px solid #e0e0e0', cursor: 'pointer',
+    fontFamily: 'inherit', textAlign: 'center',
   },
   summaryBox: {
-    backgroundColor: 'var(--vak-bg)',
-    borderRadius: '12px',
-    padding: '1rem',
-    marginBottom: '1.5rem',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '6px',
+    backgroundColor: 'var(--vak-bg)', borderRadius: '12px', padding: '1rem',
+    marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '6px',
   },
-  summaryRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    fontSize: '0.9rem',
-  },
-  sectionLabel: {
-    fontWeight: 800,
-    fontSize: '0.85rem',
-    color: 'var(--vak-dark)',
-    marginBottom: '0.6rem',
-    letterSpacing: '0.5px',
-  },
-  optionGroup: {
-    display: 'flex',
-    gap: '10px',
-    marginBottom: '1.5rem',
-    flexWrap: 'wrap',
-  },
+  summaryRow: { display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' },
+  sectionLabel: { fontWeight: 800, fontSize: '0.85rem', color: 'var(--vak-dark)', marginBottom: '0.6rem', letterSpacing: '0.5px' },
+  optionGroup: { display: 'flex', gap: '10px', marginBottom: '1.25rem', flexWrap: 'wrap' },
   option: {
-    flex: 1,
-    padding: '0.75rem',
-    borderRadius: '10px',
-    border: '2px solid #e0e0e0',
-    backgroundColor: 'white',
-    fontFamily: 'inherit',
-    fontWeight: 700,
-    fontSize: '0.9rem',
-    cursor: 'pointer',
-    color: '#555',
-    transition: 'all 0.15s',
-    minWidth: '130px',
+    flex: 1, padding: '0.75rem', borderRadius: '10px', border: '2px solid #e0e0e0',
+    backgroundColor: 'white', fontFamily: 'inherit', fontWeight: 700, fontSize: '0.9rem',
+    cursor: 'pointer', color: '#555', minWidth: '130px',
   },
   optionActive: {
-    flex: 1,
-    padding: '0.75rem',
-    borderRadius: '10px',
-    border: '2px solid var(--vak-red)',
-    backgroundColor: 'rgba(234,29,44,0.07)',
-    fontFamily: 'inherit',
-    fontWeight: 700,
-    fontSize: '0.9rem',
-    cursor: 'pointer',
-    color: 'var(--vak-red)',
-    transition: 'all 0.15s',
-    minWidth: '130px',
+    flex: 1, padding: '0.75rem', borderRadius: '10px', border: '2px solid var(--vak-red)',
+    backgroundColor: 'rgba(234,29,44,0.07)', fontFamily: 'inherit', fontWeight: 700,
+    fontSize: '0.9rem', cursor: 'pointer', color: 'var(--vak-red)', minWidth: '130px',
+  },
+  addressBox: { marginBottom: '1.25rem' },
+  addressNote: { fontSize: '0.78rem', color: '#888', marginBottom: '8px' },
+  addressInput: {
+    flex: 1, padding: '0.65rem 0.9rem', borderRadius: '10px', border: '2px solid #e0e0e0',
+    fontSize: '0.9rem', fontFamily: 'inherit', color: 'var(--vak-dark)', outline: 'none',
+    transition: 'border-color 0.2s',
+  },
+  validateBtn: {
+    padding: '0 1rem', borderRadius: '10px', border: 'none',
+    backgroundColor: 'var(--vak-dark)', color: 'white', fontWeight: 800,
+    fontSize: '0.9rem', cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0,
+    minWidth: '48px',
   },
 };
 

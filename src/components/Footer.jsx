@@ -17,6 +17,12 @@ const Footer = () => {
       <div style={{ marginTop: '1rem', textAlign: 'center', fontSize: '0.8rem', opacity: 0.8 }}>
         <Link to="/admin" style={{ color: 'white', textDecoration: 'underline' }}>Panel de Administración</Link>
       </div>
+      <div style={{ marginTop: '0.75rem', textAlign: 'center', fontSize: '0.75rem', opacity: 0.6 }}>
+        Diseñada por{' '}
+        <a href="https://soluway.io" target="_blank" rel="noopener noreferrer" style={{ color: 'white', fontWeight: 700, textDecoration: 'underline' }}>
+          Soluway
+        </a>
+      </div>
     </footer>
   );
 };
