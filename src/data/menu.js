@@ -82,7 +82,8 @@ export const getSettings = () => {
   return {
     deliveryPrice: 0,
     storeAddress: '',
-    storeCoords: { lat: -34.7167, lng: -58.2833 }, // Bernal por defecto
+    storeCoords: { lat: -34.7167, lng: -58.2833 },
+    storeZone: 'Bernal',
     deliveryRadiusKm: 4,
   };
 };

@@ -238,7 +238,7 @@ const AdminView = () => {
     try {
       const query = encodeURIComponent(settings.storeAddress);
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`,
+        `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1&addressdetails=1`,
         { headers: { 'Accept-Language': 'es' } }
       );
       const data = await res.json();
@@ -247,7 +247,9 @@ const AdminView = () => {
         return;
       }
       const coords = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
-      const updated = { ...settings, storeCoords: coords };
+      const addr = data[0].address || {};
+      const zone = addr.suburb || addr.neighbourhood || addr.city_district || addr.town || addr.city || 'la zona';
+      const updated = { ...settings, storeCoords: coords, storeZone: zone };
       setSettings(updated);
       saveSettings(updated);
       setSettingsMsg('¡Dirección del local verificada y guardada!');
@@ -549,7 +551,7 @@ const AdminView = () => {
                 </div>
                 {settings.storeCoords && settings.storeAddress && (
                   <span style={{ fontSize: '0.75rem', color: '#2e7d32', fontWeight: 600 }}>
-                    ✓ Coordenadas: {settings.storeCoords.lat.toFixed(4)}, {settings.storeCoords.lng.toFixed(4)}
+                    ✓ Zona detectada: <strong>{settings.storeZone}</strong> ({settings.storeCoords.lat.toFixed(4)}, {settings.storeCoords.lng.toFixed(4)})
                   </span>
                 )}
               </div>
