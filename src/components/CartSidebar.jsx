@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useCart } from '../context/CartContext';
 import { getSettings } from '../data/menu';
-import { X, Plus, Minus, MessageCircle, ChevronLeft, MapPin, Navigation } from 'lucide-react';
+import { X, Plus, Minus, MessageCircle, ChevronLeft, Navigation } from 'lucide-react';
 import Swal from 'sweetalert2';
 
 const WA_NUMBER = '5491135889974';
@@ -26,8 +26,11 @@ const CartSidebar = () => {
   const [addrStreet, setAddrStreet] = useState('');
   const [addrNumber, setAddrNumber] = useState('');
   const [addrExtra, setAddrExtra] = useState('');
+  const [addrBell, setAddrBell] = useState('');
+  const [addrNotes, setAddrNotes] = useState('');
   const [addressValidated, setAddressValidated] = useState(false);
   const [addressDisplay, setAddressDisplay] = useState('');
+  const [addressCoords, setAddressCoords] = useState(null);
   const [checking, setChecking] = useState(false);
 
   const settings = getSettings();
@@ -44,7 +47,8 @@ const CartSidebar = () => {
 
   const resetAddress = () => {
     setAddrStreet(''); setAddrNumber(''); setAddrExtra('');
-    setAddressValidated(false); setAddressDisplay('');
+    setAddrBell(''); setAddrNotes('');
+    setAddressValidated(false); setAddressDisplay(''); setAddressCoords(null);
   };
 
   const handleClose = () => {
@@ -71,9 +75,11 @@ const CartSidebar = () => {
         confirmButtonText: 'Entendido',
       });
       setAddressValidated(false);
+      setAddressCoords(null);
     } else {
       setAddressValidated(true);
       setAddressDisplay(displayName);
+      setAddressCoords({ lat, lng });
       Swal.fire({
         icon: 'success',
         title: '¡Zona confirmada!',
@@ -167,8 +173,12 @@ const CartSidebar = () => {
       `📦 *Entrega:* ${delivery === 'envio' ? '🛵 Envío a domicilio' : '🏠 Retiro en local'}`,
     ];
     if (delivery === 'envio' && addressDisplay) {
-      const full = [addrStreet, addrNumber, addrExtra].filter(Boolean).join(' ');
-      parts.push(`📍 *Dirección:* ${full || addressDisplay}`);
+      const streetLine = [addrStreet, addrNumber].filter(Boolean).join(' ') || addressDisplay;
+      parts.push(`📍 *Dirección:* ${streetLine}`);
+      if (addrExtra) parts.push(`🏢 *Piso/Dpto:* ${addrExtra}`);
+      if (addrBell) parts.push(`🔔 *Timbre:* ${addrBell}`);
+      if (addressCoords) parts.push(`🗺️ *Ubicación:* https://maps.google.com/?q=${addressCoords.lat},${addressCoords.lng}`);
+      if (addrNotes) parts.push(`📝 *Observaciones:* ${addrNotes}`);
     }
     parts.push(`💰 *Pago:* ${payment === 'transferencia' ? '💳 Transferencia' : '💵 Efectivo'}`);
     return encodeURIComponent(parts.join('\n'));
@@ -332,6 +342,28 @@ const CartSidebar = () => {
                       ✓ {addressDisplay} — dentro de la zona de cobertura
                     </p>
                   )}
+
+                  {/* Timbre y observaciones — siempre visibles para envío */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px' }}>
+                    <div>
+                      <label style={styles.fieldLabel}>Timbre / referencia <span style={{ fontWeight: 400, color: '#aaa' }}>(opcional)</span></label>
+                      <input
+                        style={styles.fieldInput}
+                        placeholder="Ej: Rodriguez, timbre 3B"
+                        value={addrBell}
+                        onChange={(e) => setAddrBell(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label style={styles.fieldLabel}>Observaciones <span style={{ fontWeight: 400, color: '#aaa' }}>(opcional)</span></label>
+                      <input
+                        style={styles.fieldInput}
+                        placeholder="Ej: sin sal, alergia, etc."
+                        value={addrNotes}
+                        onChange={(e) => setAddrNotes(e.target.value)}
+                      />
+                    </div>
+                  </div>
                 </div>
               )}
 

@@ -36,6 +36,7 @@ const AdminView = () => {
   const [settings, setSettings] = useState(getSettings);
   const [settingsMsg, setSettingsMsg] = useState(null);
   const [geocodingStore, setGeocodingStore] = useState(false);
+  const [gpsStore, setGpsStore] = useState(false);
 
   // Auto-save menú
   const [saveStatus, setSaveStatus] = useState(''); // '' | 'guardando' | 'guardado'
@@ -259,6 +260,47 @@ const AdminView = () => {
     } finally {
       setGeocodingStore(false);
     }
+  };
+
+  const useGPSStore = () => {
+    if (!navigator.geolocation) {
+      vak.fire({ icon: 'error', title: 'Sin GPS', text: 'Tu dispositivo no soporta geolocalización.', confirmButtonText: 'OK' });
+      return;
+    }
+    setGpsStore(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const { latitude: lat, longitude: lng } = pos.coords;
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`,
+            { headers: { 'Accept-Language': 'es' } }
+          );
+          const data = await res.json();
+          const addr = data.address || {};
+          const road = addr.road || addr.pedestrian || '';
+          const number = addr.house_number ? ` ${addr.house_number}` : '';
+          const displayAddr = road ? `${road}${number}` : data.display_name?.split(',')[0] || '';
+          const zone = addr.suburb || addr.neighbourhood || addr.city_district || addr.town || addr.city || 'la zona';
+          const coords = { lat, lng };
+          const updated = { ...settings, storeAddress: displayAddr, storeCoords: coords, storeZone: zone };
+          setSettings(updated);
+          saveSettings(updated);
+          setSettingsMsg(`¡Ubicación del local guardada! Zona: ${zone}`);
+          setTimeout(() => setSettingsMsg(null), 3000);
+        } catch {
+          vak.fire({ icon: 'error', title: 'Error', text: 'No se pudo obtener la ubicación.', confirmButtonText: 'OK' });
+        } finally {
+          setGpsStore(false);
+        }
+      },
+      (err) => {
+        setGpsStore(false);
+        const msgs = { 1: 'Permiso denegado. Activá el GPS.', 2: 'No se pudo obtener la ubicación.', 3: 'Tiempo de espera agotado.' };
+        vak.fire({ icon: 'error', title: 'Error de GPS', text: msgs[err.code] || 'Error desconocido.', confirmButtonText: 'OK' });
+      },
+      { timeout: 10000, enableHighAccuracy: true }
+    );
   };
 
   const handleSaveSettings = (e) => {
@@ -531,6 +573,15 @@ const AdminView = () => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxWidth: '360px' }}>
               <div style={styles.credField}>
                 <label style={styles.credLabel}>Dirección del local</label>
+                {/* GPS button */}
+                <button
+                  type="button"
+                  onClick={useGPSStore}
+                  disabled={gpsStore}
+                  style={{ ...styles.btnUniform, width: '100%', justifyContent: 'center', marginBottom: '8px', opacity: gpsStore ? 0.6 : 1 }}
+                >
+                  📍 {gpsStore ? 'Detectando ubicación...' : 'Usar mi ubicación actual'}
+                </button>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <input
                     type="text"
