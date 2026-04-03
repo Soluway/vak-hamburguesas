@@ -4,7 +4,7 @@ import { getSettings } from '../data/menu';
 import { X, Plus, Minus, MessageCircle, ChevronLeft, Navigation } from 'lucide-react';
 import Swal from 'sweetalert2';
 
-const WA_NUMBER = '5491135889974';
+const WA_NUMBER = '5491139083989';
 const DEFAULT_COORDS = { lat: -34.7167, lng: -58.2833 };
 
 const haversineKm = (lat1, lng1, lat2, lng2) => {

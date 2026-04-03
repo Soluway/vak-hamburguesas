@@ -7,7 +7,7 @@ const Footer = () => {
       <div style={styles.content}>
         <div style={styles.column}>
           <span style={styles.title}>CONTACTO</span>
-          <span style={styles.text}>11 3588-9974</span>
+          <span style={styles.text}>11 3908-3989</span>
         </div>
         <div style={styles.column}>
           <span style={styles.title}>INSTAGRAM</span>
